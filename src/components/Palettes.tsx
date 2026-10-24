@@ -15,6 +15,8 @@ import {
   Plus,
   ArrowRight,
   Type,
+  Download,
+  Layers,
 } from "lucide-react";
 import { useAppStore } from "../store";
 import { flattenNotes, fuzzyFilter, relPath } from "../lib/utils";
@@ -231,6 +233,18 @@ export function CommandPalette() {
         shortcut: "Ctrl Shift G",
         icon: <Waypoints size={15} />,
         run: store.openGraphTab,
+      },
+      {
+        id: "import",
+        label: "Import notes…",
+        icon: <Download size={15} />,
+        run: store.openImport,
+      },
+      {
+        id: "vaults",
+        label: "Manage vaults…",
+        icon: <Layers size={15} />,
+        run: store.openVaults,
       },
       {
         id: "toggle-sidebar",

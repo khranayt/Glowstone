@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Baseline,
   Bold,
@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppStore } from "../store";
-import { runEditorCommand } from "../editor/commands";
+import { runEditorCommand, insertTable } from "../editor/commands";
 import { isTauri } from "../lib/api";
 import { Popover } from "./Popover";
 
@@ -74,6 +74,7 @@ export function EditorToolbar() {
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const barRef = useRef<HTMLDivElement | null>(null);
+  const [tableSize, setTableSize] = useState({ rows: 3, cols: 3 });
 
   // Drop low-priority buttons when the note pane gets narrow, rather than
   // letting the toolbar clip behind the sidebar.
@@ -167,9 +168,64 @@ export function EditorToolbar() {
       </div>
       <div className="toolbar-separator" />
       <div className="toolbar-group">
-        <ToolButton label="Table" onClick={run("table")}>
-          <TableIcon size={16} />
-        </ToolButton>
+        <Popover
+          align="left"
+          width={214}
+          trigger={({ toggle, open }) => (
+            <button
+              className={`toolbar-button ${open ? "active" : ""}`}
+              onClick={toggle}
+              title="Insert table"
+              aria-label="Insert table"
+            >
+              <TableIcon size={16} />
+            </button>
+          )}
+        >
+          {(close) => (
+            <div className="table-picker">
+              <div
+                className="table-picker-grid"
+                onMouseLeave={() => setTableSize({ rows: 3, cols: 3 })}
+              >
+                {Array.from({ length: 8 }, (_, row) =>
+                  Array.from({ length: 8 }, (_, column) => {
+                    const rows = row + 1;
+                    const cols = column + 1;
+                    const selected = rows <= tableSize.rows && cols <= tableSize.cols;
+                    return (
+                      <button
+                        key={`${rows}-${cols}`}
+                        className={`table-picker-cell ${selected ? "active" : ""}`}
+                        onMouseEnter={() => setTableSize({ rows, cols })}
+                        onClick={() => {
+                          insertTable(rows, cols);
+                          setTableSize({ rows: 3, cols: 3 });
+                          close();
+                        }}
+                        title={`${rows} × ${cols} table`}
+                        aria-label={`Insert ${rows} by ${cols} table`}
+                      />
+                    );
+                  }),
+                )}
+              </div>
+              <div className="table-picker-label">
+                {tableSize.rows} × {tableSize.cols} table
+              </div>
+              <button
+                className="menu-item table-picker-format"
+                onClick={() => {
+                  runEditorCommand("formatTable");
+                  close();
+                }}
+              >
+                <span className="menu-icon-spacer" />
+                <span>Format table at cursor</span>
+              </button>
+            </div>
+          )}
+        </Popover>
         <ToolButton label="Task list" onClick={run("taskList")}>
           <ListChecks size={16} />
         </ToolButton>
@@ -287,6 +343,16 @@ export function EditorToolbar() {
               >
                 <span className="menu-icon-spacer" />
                 <span>Horizontal rule</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  runEditorCommand("formatTable");
+                  close();
+                }}
+              >
+                <span className="menu-icon-spacer" />
+                <span>Format table</span>
               </button>
               <button
                 className="menu-item"

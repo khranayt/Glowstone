@@ -46,6 +46,8 @@ export function SettingsModal() {
   const vault = useAppStore((s) => s.vault);
   const chooseVault = useAppStore((s) => s.chooseVault);
   const closeVault = useAppStore((s) => s.closeVault);
+  const openImport = useAppStore((s) => s.openImport);
+  const openVaults = useAppStore((s) => s.openVaults);
 
   const [fontSize, setFontSize] = useState(settings.fontSize);
   useEffect(() => {
@@ -241,6 +243,12 @@ export function SettingsModal() {
                 <div className="setting-button-row">
                   <button className="btn btn-secondary" onClick={() => void chooseVault()}>
                     Open another vault…
+                  </button>
+                  <button className="btn btn-secondary" onClick={openVaults}>
+                    Manage vaults…
+                  </button>
+                  <button className="btn btn-secondary" onClick={openImport}>
+                    Import notes…
                   </button>
                   {vault && (
                     <button

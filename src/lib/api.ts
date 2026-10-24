@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   FileNode,
   GraphData,
+  ImportKind,
+  ImportResult,
   SearchFile,
   Settings,
   VaultInfo,
@@ -36,4 +38,6 @@ export const api = {
   searchVault: (vault: string, query: string, caseSensitive: boolean) =>
     invoke<SearchFile[]>("search_vault", { vault, query, caseSensitive }),
   getGraph: (vault: string) => invoke<GraphData>("get_graph", { vault }),
+  importVault: (kind: ImportKind, source: string, parent: string, name: string) =>
+    invoke<ImportResult>("import_vault", { kind, source, parent, name }),
 };

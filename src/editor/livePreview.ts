@@ -6,7 +6,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import type { Range } from "@codemirror/state";
+import { StateField, type EditorState, type Range } from "@codemirror/state";
 import { calloutKind, calloutSvg } from "../lib/calloutIcons";
 
 export interface LivePreviewOptions {
@@ -22,7 +22,6 @@ const quoteLine = Decoration.line({ class: "cm-quote-line" });
 const codeLine = Decoration.line({ class: "cm-code-line" });
 const listLine = Decoration.line({ class: "cm-list-line" });
 const taskLine = Decoration.line({ class: "cm-list-line cm-task-line" });
-const activeTaskLine = Decoration.line({ class: "cm-list-line cm-task-line cm-task-line-active" });
 
 const hidden = Decoration.replace({});
 
@@ -50,13 +49,14 @@ class CheckboxWidget extends WidgetType {
       view.dispatch({
         changes: { from: this.from, to: this.from + 3, insert: this.checked ? "[ ]" : "[x]" },
       });
-      view.focus();
+      // Keep the checkbox in place: focusing the editor makes the line "active"
+      // and used to swap the widget back to raw Markdown, nudging the row down.
     });
     return box;
   }
 
   ignoreEvent() {
-    return false;
+    return true;
   }
 }
 
@@ -112,6 +112,96 @@ class BulletWidget extends WidgetType {
     const dot = document.createElement("span");
     dot.className = "cm-list-bullet";
     return dot;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+const splitTableCells = (line: string): string[] => {
+  let text = line.trim();
+  if (text.startsWith("|")) text = text.slice(1);
+  if (text.endsWith("|")) text = text.slice(0, -1);
+  const cells: string[] = [];
+  let cell = "";
+  let escaped = false;
+  for (const char of text) {
+    if (escaped) {
+      cell += char;
+      escaped = false;
+    } else if (char === "\\") {
+      escaped = true;
+    } else if (char === "|") {
+      cells.push(cell.trim());
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+};
+
+const isTableText = (text: string) => /^\s*\|.*\|\s*$/.test(text);
+
+const isDelimiterRow = (cells: string[]) =>
+  cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")));
+
+type CellAlign = "" | "left" | "center" | "right";
+
+const alignmentOf = (cell: string): CellAlign => {
+  const value = cell.trim();
+  const left = value.startsWith(":");
+  const right = value.endsWith(":");
+  if (left && right) return "center";
+  if (right) return "right";
+  if (left) return "left";
+  return "";
+};
+
+class TableWidget extends WidgetType {
+  constructor(
+    readonly rows: string[][],
+    readonly align: CellAlign[],
+    readonly from: number,
+  ) {
+    super();
+  }
+
+  eq(other: TableWidget) {
+    return other.from === this.from && other.rows === this.rows;
+  }
+
+  toDOM(view: EditorView) {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-table-widget";
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const body = document.createElement("tbody");
+    const cellFor = (tag: "th" | "td", value: string, column: number) => {
+      const cell = document.createElement(tag);
+      cell.textContent = value;
+      const align = this.align[column];
+      if (align) cell.style.textAlign = align;
+      return cell;
+    };
+    this.rows.forEach((row, rowIndex) => {
+      const tr = document.createElement("tr");
+      row.forEach((value, column) => {
+        tr.append(cellFor(rowIndex === 0 ? "th" : "td", value, column));
+      });
+      (rowIndex === 0 ? head : body).append(tr);
+    });
+    table.append(head, body);
+    wrap.append(table);
+    wrap.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
+    return wrap;
   }
 
   ignoreEvent() {
@@ -200,6 +290,43 @@ const inlinePiece = (
   };
 };
 
+interface TableBlock {
+  startLine: number;
+  endLine: number;
+  from: number;
+  to: number;
+  rows: string[][];
+  align: CellAlign[];
+}
+
+const findTableBlocks = (state: EditorState): TableBlock[] => {
+  const doc = state.doc;
+  const blocks: TableBlock[] = [];
+  for (let n = 1; n < doc.lines; n += 1) {
+    if (!isTableText(doc.line(n).text)) continue;
+    const headerCells = splitTableCells(doc.line(n).text);
+    const dividerCells = splitTableCells(doc.line(n + 1).text);
+    if (headerCells.length === 0 || !isDelimiterRow(dividerCells)) continue;
+    let end = n + 1;
+    while (end < doc.lines && isTableText(doc.line(end + 1).text)) end += 1;
+    const rows: string[][] = [];
+    for (let index = n; index <= end; index += 1) {
+      if (index === n + 1) continue;
+      rows.push(splitTableCells(doc.line(index).text));
+    }
+    blocks.push({
+      startLine: n,
+      endLine: end,
+      from: doc.line(n).from,
+      to: doc.line(end).to,
+      rows,
+      align: dividerCells.map(alignmentOf),
+    });
+    n = end;
+  }
+  return blocks;
+};
+
 const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => {
   const { state } = view;
   const ranges: DecoRange[] = [];
@@ -253,6 +380,15 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
   }
   closeCallout();
 
+  // Table lines are handled by the block-table state field; skip them here so
+  // the plugin only provides inline decorations.
+  const tableLineSet = new Set<number>();
+  for (const block of findTableBlocks(state)) {
+    for (let index = block.startLine; index <= block.endLine; index += 1) {
+      tableLineSet.add(index);
+    }
+  }
+
   for (const visible of view.visibleRanges) {
     let position = visible.from;
     while (position <= visible.to) {
@@ -279,6 +415,12 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
         } else {
           ranges.push(codeLine.range(line.from));
         }
+        position = line.to + 1;
+        continue;
+      }
+
+      // Table rows are rendered by the table state field below.
+      if (tableLineSet.has(line.number)) {
         position = line.to + 1;
         continue;
       }
@@ -341,14 +483,21 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
       const bulletMatch = /^(\s*)([-*+])(\s+)/.exec(text);
       const orderedMatch = /^(\s*)(\d+[.)])(\s+)/.exec(text);
       if (taskMatch) {
-        ranges.push((active ? activeTaskLine : taskLine).range(line.from));
-        if (!active) {
-          const indent = /^\s*/.exec(text)?.[0].length ?? 0;
+        ranges.push(taskLine.range(line.from));
+        const indent = /^\s*/.exec(text)?.[0].length ?? 0;
+        const markerStart = line.from + indent;
+        const markerEnd = line.from + taskMatch[0].length;
+        const markerActive = view.state.selection.ranges.some(
+          (range) => range.from <= markerEnd && range.to >= markerStart,
+        );
+        // Keep the checkbox rendered on the focused line too, unless the cursor
+        // is actually inside the marker, so clicking never shifts the row.
+        if (!active || !markerActive) {
           const boxStart = line.from + taskMatch[1].length;
           ranges.push(
             Decoration.replace({
               widget: new CheckboxWidget(taskMatch[2].toLowerCase() === "x", boxStart),
-            }).range(line.from + indent, line.from + taskMatch[0].length),
+            }).range(markerStart, markerEnd),
           );
         }
       } else if (bulletMatch) {
@@ -452,6 +601,23 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
         );
       });
 
+      // Underline and inline text colour (produced by the toolbar).
+      collect(/<u>([^<\n]+?)<\/u>/gi, (match) =>
+        inlinePiece(base, match, "cm-underline", match.index + 3, match.index + match[0].length - 4),
+      );
+      collect(/<span\s+style="color:\s*([^";]+)"\s*>([^<\n]*?)<\/span>/gi, (match) => {
+        const contentStart = match.index + match[0].indexOf(">") + 1;
+        const contentEnd = match.index + match[0].lastIndexOf("</span>");
+        return inlinePiece(
+          base,
+          match,
+          "cm-text-color",
+          contentStart,
+          contentEnd,
+          { style: `color: ${match[1].trim()}` },
+        );
+      });
+
       // Bold, strikethrough, highlight, then italics.
       collect(/\*\*\*([^*\n]+?)\*\*\*/g, (match) =>
         inlinePiece(
@@ -535,7 +701,35 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
   return Decoration.set(ranges, true);
 };
 
-export const livePreview = (getOptions: () => LivePreviewOptions) =>
+const tableDecorations = (state: EditorState): DecorationSet => {
+  const ranges = findTableBlocks(state)
+    .filter(
+      (block) =>
+        !state.selection.ranges.some(
+          (range) => range.from <= block.to && range.to >= block.from,
+        ),
+    )
+    .map((block) =>
+      Decoration.replace({
+        widget: new TableWidget(block.rows, block.align, block.from),
+        block: true,
+      }).range(block.from, block.to),
+    );
+  return Decoration.set(ranges, true);
+};
+
+// Block widgets must come from a state field, not from a ViewPlugin.
+const tableField = StateField.define<DecorationSet>({
+  create: tableDecorations,
+  update(value, transaction) {
+    if (!transaction.docChanged && !transaction.selection) return value;
+    return tableDecorations(transaction.state);
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+export const livePreview = (getOptions: () => LivePreviewOptions) => [
+  tableField,
   ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
@@ -553,4 +747,5 @@ export const livePreview = (getOptions: () => LivePreviewOptions) =>
     {
       decorations: (plugin) => plugin.decorations,
     },
-  );
+  ),
+];

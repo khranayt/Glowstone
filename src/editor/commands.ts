@@ -128,6 +128,98 @@ const quote = () => applyBlockPrefix(() => "> ", (text) => /^>\s?/.test(text));
 
 const paragraph = () => applyBlockPrefix(() => "");
 
+const tableCell = (cell: string) => cell.replace(/\|/g, "\\|").trim();
+
+const splitTableRow = (line: string): string[] => {
+  let text = line.trim();
+  if (text.startsWith("|")) text = text.slice(1);
+  if (text.endsWith("|")) text = text.slice(0, -1);
+  const cells: string[] = [];
+  let cell = "";
+  let escaped = false;
+  for (const char of text) {
+    if (escaped) {
+      cell += char;
+      escaped = false;
+    } else if (char === "\\") {
+      escaped = true;
+    } else if (char === "|") {
+      cells.push(cell);
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell);
+  return cells.map(tableCell);
+};
+
+const isTableLine = (line: string) => /^\s*\|.*\|\s*$/.test(line);
+
+export const insertTable = (rowCount: number, columnCount: number) =>
+  withView((view) => {
+    const rows = Math.max(1, Math.min(20, Math.round(rowCount)));
+    const cols = Math.max(1, Math.min(12, Math.round(columnCount)));
+    const header = `| ${Array.from({ length: cols }, (_, index) => `Column ${index + 1}`).join(" | ")} |`;
+    const divider = `| ${Array.from({ length: cols }, () => "---").join(" | ")} |`;
+    const body = Array.from(
+      { length: Math.max(0, rows - 1) },
+      () => `| ${Array.from({ length: cols }, () => "").join(" | ")} |`,
+    );
+    const block = [header, divider, ...body].join("\n");
+    const { from, to } = view.state.selection.main;
+    const doc = view.state.doc;
+    const before = from > 0 && doc.sliceString(from - 1, from) !== "\n" ? "\n" : "";
+    const after = to < doc.length && doc.sliceString(to, to + 1) !== "\n" ? "\n" : "";
+    const insertion = `${before}${block}${after}`;
+    const cursor = from + before.length + 2;
+    view.dispatch({
+      changes: { from, to, insert: insertion },
+      selection: { anchor: cursor },
+      scrollIntoView: true,
+    });
+  });
+
+const formatTable = () =>
+  withView((view) => {
+    const doc = view.state.doc;
+    const { from, to } = view.state.selection.main;
+    const lineAt = (number: number) => doc.line(number).text;
+    let first = doc.lineAt(from).number;
+    let last = doc.lineAt(to).number;
+    if (!isTableLine(lineAt(first)) || !isTableLine(lineAt(last))) return;
+    while (first > 1 && isTableLine(lineAt(first - 1))) first -= 1;
+    while (last < doc.lines && isTableLine(lineAt(last + 1))) last += 1;
+
+    const rows = Array.from({ length: last - first + 1 }, (_, index) =>
+      splitTableRow(lineAt(first + index)),
+    );
+    const widths: number[] = [];
+    for (const row of rows) {
+      row.forEach((cell, index) => {
+        widths[index] = Math.max(widths[index] ?? 3, cell.length, 3);
+      });
+    }
+    if (widths.length === 0) return;
+    const delimiter = (row: string[]) =>
+      row.every((cell) => /^:?-{3,}:?$/.test(cell)) || row.every((cell) => cell === "");
+    const formatted = rows.map((row, index) => {
+      if (index > 0 && delimiter(row)) {
+        return `| ${widths.map((width) => "-".repeat(Math.max(3, width))).join(" | ")} |`;
+      }
+      const cells = widths.map((width, column) => (row[column] ?? "").padEnd(width, " "));
+      return `| ${cells.join(" | ")} |`;
+    });
+    const insertion = formatted.join("\n");
+    const firstLine = doc.line(first);
+    const lastLine = doc.line(last);
+    view.dispatch({
+      changes: { from: firstLine.from, to: lastLine.to, insert: insertion },
+      selection: { anchor: firstLine.from + 2 },
+      scrollIntoView: true,
+    });
+  });
+
 export type EditorCommandName =
   | "undo"
   | "redo"
@@ -149,6 +241,7 @@ export type EditorCommandName =
   | "numberedList"
   | "taskList"
   | "table"
+  | "formatTable"
   | "image"
   | "divider"
   | "callout"
@@ -191,7 +284,7 @@ export const runEditorCommand = (command: EditorCommandName): boolean => {
         const selected = view.state.sliceDoc(from, to);
         const label = selected || "link text";
         const insertion = `[${label}]()`;
-        const cursor = from + label.length + 3;
+        const cursor = from + label.length + 2;
         view.dispatch({
           changes: { from, to, insert: insertion },
           selection: { anchor: cursor },
@@ -222,16 +315,18 @@ export const runEditorCommand = (command: EditorCommandName): boolean => {
         2,
         8,
       );
+    case "formatTable":
+      return formatTable();
     case "image":
-      return insertText("![](attachments/)", 16, 0);
+      return insertText("![image](attachments/)", 2, 5);
     case "divider":
       return insertText("\n---\n", 5);
     case "callout":
-      return insertText("> [!note] Title\n> ", 12, 5);
+      return insertText("> [!note] Title\n> ", 10, 5);
     case "math":
       return insertText("$$\n\n$$", 3);
     case "footnote":
-      return insertText("[^1]\n\n[^1]: ", 11, 0);
+      return insertText("[^1]\n\n[^1]: ", 12, 0);
     case "clear":
       return clearFormatting();
     default:

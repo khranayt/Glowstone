@@ -6,6 +6,7 @@ export function ActivityBar() {
   const sidebarView = useAppStore((s) => s.sidebarView);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const setSidebarView = useAppStore((s) => s.setSidebarView);
+  const openGraphTab = useAppStore((s) => s.openGraphTab);
   const openSettings = useAppStore((s) => s.openSettings);
 
   const item = (view: SidebarView, icon: React.ReactNode, label: string, shortcut: string) => (
@@ -24,7 +25,14 @@ export function ActivityBar() {
       <div className="ribbon-top">
         {item("files", <Files size={19} />, "Files", "Ctrl+Shift+E")}
         {item("search", <Search size={19} />, "Search", "Ctrl+Shift+F")}
-        {item("graph", <Waypoints size={19} />, "Graph view", "Ctrl+Shift+G")}
+        <button
+          className="ribbon-button"
+          onClick={openGraphTab}
+          title="Graph view (Ctrl+Shift+G)"
+          aria-label="Graph view"
+        >
+          <Waypoints size={19} />
+        </button>
       </div>
       <div className="ribbon-bottom">
         <button

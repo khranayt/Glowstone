@@ -23,6 +23,12 @@ export function TabBar() {
     reveal.current.get(activeTabId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeTabId, tabs.length]);
 
+  const closeMany = async (ids: string[]) => {
+    for (const id of ids) {
+      await closeTab(id);
+    }
+  };
+
   const openTabMenu = (event: MouseEvent, tab: Tab) => {
     event.preventDefault();
     event.stopPropagation();
@@ -31,13 +37,13 @@ export function TabBar() {
       {
         label: "Close others",
         action: () => {
-          tabs.filter((t) => t.id !== tab.id).forEach((t) => void closeTab(t.id));
+          void closeMany(tabs.filter((t) => t.id !== tab.id).map((t) => t.id));
         },
       },
       {
         label: "Close all",
         action: () => {
-          tabs.forEach((t) => void closeTab(t.id));
+          void closeMany(tabs.map((t) => t.id));
         },
       },
     ];
@@ -45,7 +51,7 @@ export function TabBar() {
       items.push(
         { label: "", separator: true },
         {
-          label: "Copy vault path",
+          label: "Copy note path",
           action: () => {
             void navigator.clipboard.writeText(tab.path!);
           },

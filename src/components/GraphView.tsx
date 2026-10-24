@@ -15,6 +15,7 @@ import {
 import { useAppStore } from "../store";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { Popover } from "./Popover";
+import { noteIdFromPath } from "../lib/utils";
 
 export function GraphView() {
   const graph = useAppStore((s) => s.graph);
@@ -22,6 +23,16 @@ export function GraphView() {
   const refreshGraph = useAppStore((s) => s.refreshGraph);
   const openNote = useAppStore((s) => s.openNote);
   const createNote = useAppStore((s) => s.createNote);
+  const vault = useAppStore((s) => s.vault);
+  const focusPath = useAppStore((s) => s.graphFocusPath);
+  const scope = useAppStore((s) => s.graphScope);
+  const depth = useAppStore((s) => s.graphDepth);
+  const setScope = useAppStore((s) => s.setGraphScope);
+  const setDepth = useAppStore((s) => s.setGraphDepth);
+  const activeNotePath = useAppStore((s) => {
+    const tab = s.tabs.find((item) => item.id === s.activeTabId);
+    return tab?.kind === "note" ? tab.path ?? null : null;
+  });
   const [query, setQuery] = useState("");
   const [labels, setLabels] = useState(true);
   const [showOrphans, setShowOrphans] = useState(true);
@@ -31,15 +42,54 @@ export function GraphView() {
   const [gravity, setGravity] = useState(0.003);
   const canvasRef = useRef<GraphCanvasHandle>(null);
 
+  const focus = focusPath ?? activeNotePath;
+  const activeId = vault && focus ? noteIdFromPath(vault.path, focus) : null;
+  const hasActive = Boolean(activeId && graph?.nodes.some((node) => node.id === activeId));
+
+  // Local scope keeps the focused note plus everything within a few hops.
+  const data = useMemo(() => {
+    if (!graph) return { nodes: [], links: [] };
+    if (scope !== "local" || !activeId || !hasActive) return graph;
+
+    const adjacency = new Map<string, string[]>();
+    for (const link of graph.links) {
+      const from = adjacency.get(link.source);
+      if (from) from.push(link.target);
+      else adjacency.set(link.source, [link.target]);
+      const to = adjacency.get(link.target);
+      if (to) to.push(link.source);
+      else adjacency.set(link.target, [link.source]);
+    }
+
+    const keep = new Set([activeId]);
+    let frontier = [activeId];
+    for (let hop = 0; hop < depth; hop += 1) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const neighbour of adjacency.get(id) ?? []) {
+          if (keep.has(neighbour)) continue;
+          keep.add(neighbour);
+          next.push(neighbour);
+        }
+      }
+      if (next.length === 0) break;
+      frontier = next;
+    }
+
+    return {
+      nodes: graph.nodes.filter((node) => keep.has(node.id)),
+      links: graph.links.filter((link) => keep.has(link.source) && keep.has(link.target)),
+    };
+  }, [graph, scope, activeId, hasActive, depth]);
+
   const stats = useMemo(() => {
     if (!graph) return { notes: 0, links: 0 };
     return {
-      notes: graph.nodes.filter((node) => !node.unresolved).length,
-      links: graph.links.length,
+      notes: data.nodes.filter((node) => !node.unresolved).length,
+      links: data.links.length,
     };
-  }, [graph]);
+  }, [graph, data]);
 
-  const data = graph ?? { nodes: [], links: [] };
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data.nodes
@@ -62,6 +112,44 @@ export function GraphView() {
             <Waypoints size={16} />
           </span>
           <span className="note-header-title">Graph</span>
+          <div className="graph-scope" role="group" aria-label="Graph scope">
+            <button
+              className={scope === "global" ? "active" : ""}
+              onClick={() => setScope("global")}
+              title="Show the whole vault"
+              aria-pressed={scope === "global"}
+            >
+              Global
+            </button>
+            <button
+              className={scope === "local" ? "active" : ""}
+              onClick={() => setScope("local")}
+              disabled={!hasActive}
+              title={
+                hasActive
+                  ? "Show only the open note and its neighbours"
+                  : "Open a note first to use the local graph"
+              }
+              aria-pressed={scope === "local"}
+            >
+              Local
+            </button>
+          </div>
+          {scope === "local" && hasActive && (
+            <div className="graph-depth" role="group" aria-label="Local graph depth">
+              {[1, 2, 3, 4].map((value) => (
+                <button
+                  key={value}
+                  className={depth === value ? "active" : ""}
+                  onClick={() => setDepth(value)}
+                  title={`${value} ${value === 1 ? "hop" : "hops"} from the focused note`}
+                  aria-pressed={depth === value}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          )}
           <span className="graph-header-stats">
             {stats.notes} {stats.notes === 1 ? "note" : "notes"} · {stats.links}{" "}
             {stats.links === 1 ? "link" : "links"}
@@ -214,6 +302,7 @@ export function GraphView() {
           <GraphCanvas
             ref={canvasRef}
             data={data}
+            activeId={activeId}
             labels={labels}
             showOrphans={showOrphans}
             showUnresolved={showUnresolved}

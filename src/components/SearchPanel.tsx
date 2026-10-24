@@ -6,12 +6,15 @@ import { relPath } from "../lib/utils";
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function Highlighted({ text, query, caseSensitive }: { text: string; query: string; caseSensitive: boolean }) {
-  if (!query.trim()) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, caseSensitive ? "g" : "gi"));
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return <>{text}</>;
+  const pattern = terms.map(escapeRegExp).join("|");
+  const parts = text.split(new RegExp(`(${pattern})`, caseSensitive ? "g" : "gi"));
+  const termSet = new Set(caseSensitive ? terms : terms.map((term) => term.toLowerCase()));
   return (
     <>
       {parts.map((part, index) =>
-        part.toLowerCase() === query.toLowerCase() && part ? (
+        part && termSet.has(caseSensitive ? part : part.toLowerCase()) ? (
           <mark key={index}>{part}</mark>
         ) : (
           <span key={index}>{part}</span>

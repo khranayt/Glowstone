@@ -542,3 +542,58 @@
 .editor-host .cm-nonmatchingBracket {
   color: var(--danger);
 }
+
+/* ------------------------------------------------------------ tables -- */
+
+.editor-host .cm-underline {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.editor-host .cm-table-widget {
+  margin: 0.55em 0;
+  padding: 1px 3px;
+  overflow-x: auto;
+}
+
+.editor-host .cm-table-widget table {
+  width: 100%;
+  border: 1px solid var(--background-modifier-border);
+  border-collapse: collapse;
+  border-radius: var(--radius-m);
+  font-size: 0.93em;
+  line-height: 1.5;
+}
+
+.editor-host .cm-table-widget th,
+.editor-host .cm-table-widget td {
+  padding: 6px 11px;
+  border-right: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.editor-host .cm-table-widget th:last-child,
+.editor-host .cm-table-widget td:last-child {
+  border-right: none;
+}
+
+.editor-host .cm-table-widget tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.editor-host .cm-table-widget th {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.editor-host .cm-table-widget tbody tr:nth-child(even) {
+  background: var(--background-primary-alt);
+}
+
+.editor-host .cm-table-widget tbody tr:hover {
+  background: var(--background-modifier-hover);
+}

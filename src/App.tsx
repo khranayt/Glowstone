@@ -15,6 +15,8 @@ import { NoteView } from "./components/NoteView";
 import { GraphView } from "./components/GraphView";
 import { Welcome } from "./components/Welcome";
 import { SettingsModal } from "./components/SettingsModal";
+import { ImportModal } from "./components/ImportModal";
+import { VaultManager } from "./components/VaultManager";
 import { QuickSwitcher, CommandPalette } from "./components/Palettes";
 import { ConfirmDialog, PromptDialog, ContextMenu, ToastStack } from "./components/Dialogs";
 import logo from "./assets/logo.png";
@@ -56,6 +58,7 @@ export default function App() {
   const expanded = useAppStore((s) => s.expanded);
   const theme = useAppStore((s) => s.settings.theme);
   const fontSize = useAppStore((s) => s.settings.fontSize);
+  const onboardingComplete = useAppStore((s) => s.settings.onboardingComplete);
   const [resizing, setResizing] = useState(false);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
@@ -67,6 +70,12 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    if (!ready || vault || onboardingComplete) return;
+    const timer = window.setTimeout(() => useAppStore.getState().openImport(), 300);
+    return () => window.clearTimeout(timer);
+  }, [ready, vault, onboardingComplete]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
@@ -87,6 +96,8 @@ export default function App() {
         if (state.paletteOpen) state.closePalette();
         if (state.contextMenu) state.setContextMenu(null);
         if (state.vaultMenuOpen) state.setVaultMenuOpen(false);
+        if (state.importOpen) state.closeImport();
+        if (state.vaultsOpen) state.closeVaults();
         return;
       }
 
@@ -264,58 +275,56 @@ export default function App() {
 
   if (!ready) return <Splash />;
 
-  if (!vault) {
-    return (
-      <>
-        <Welcome />
-        <ToastStack />
-        <PromptDialog />
-      </>
-    );
-  }
-
   return (
-    <div className={`app-shell ${resizing ? "resizing" : ""}`}>
-      <TitleBar />
-      <div className="app-body">
-        <ActivityBar />
-        {sidebarOpen && <Sidebar />}
-        {sidebarOpen && (
-          <div
-            className="sidebar-resizer"
-            onMouseDown={startResize}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize sidebar"
-          />
-        )}
-        <main className="main-area">
-          {!activeTab || activeTab.kind === "empty" ? (
-            <EmptyTabView />
-          ) : activeTab.kind === "graph" ? (
-            <GraphView />
-          ) : (
-            <NoteView tab={activeTab} />
-          )}
-        </main>
-        {rightPanelOpen && <RightSidebar />}
-      </div>
-      <StatusBar />
+    <>
+      {!vault ? (
+        <Welcome />
+      ) : (
+        <div className={`app-shell ${resizing ? "resizing" : ""}`}>
+          <TitleBar />
+          <div className="app-body">
+            <ActivityBar />
+            {sidebarOpen && <Sidebar />}
+            {sidebarOpen && (
+              <div
+                className="sidebar-resizer"
+                onMouseDown={startResize}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize sidebar"
+              />
+            )}
+            <main className="main-area">
+              {!activeTab || activeTab.kind === "empty" ? (
+                <EmptyTabView />
+              ) : activeTab.kind === "graph" ? (
+                <GraphView />
+              ) : (
+                <NoteView tab={activeTab} />
+              )}
+            </main>
+            {rightPanelOpen && <RightSidebar />}
+          </div>
+          <StatusBar />
 
-      {initializing && (
-        <div className="app-loading-overlay">
-          <Loader2 size={22} className="spin" />
-          <span>Opening vault…</span>
+          {initializing && (
+            <div className="app-loading-overlay">
+              <Loader2 size={22} className="spin" />
+              <span>Opening vault…</span>
+            </div>
+          )}
         </div>
       )}
 
       <QuickSwitcher />
       <CommandPalette />
       <SettingsModal />
+      <ImportModal />
+      <VaultManager />
       <ConfirmDialog />
       <PromptDialog />
       <ContextMenu />
       <ToastStack />
-    </div>
+    </>
   );
 }

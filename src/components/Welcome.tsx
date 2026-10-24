@@ -1,4 +1,4 @@
-import { FolderOpen, Loader2, Plus, Clock } from "lucide-react";
+import { FolderOpen, Loader2, Plus, Clock, Download, Layers } from "lucide-react";
 import logo from "../assets/logo.png";
 import { useAppStore } from "../store";
 import { WindowControls } from "./WindowControls";
@@ -9,6 +9,8 @@ export function Welcome() {
   const chooseVault = useAppStore((s) => s.chooseVault);
   const createVault = useAppStore((s) => s.createVault);
   const openVaultByPath = useAppStore((s) => s.openVaultByPath);
+  const openImport = useAppStore((s) => s.openImport);
+  const openVaults = useAppStore((s) => s.openVaults);
   const initializing = useAppStore((s) => s.initializing);
 
   return (
@@ -34,6 +36,14 @@ export function Welcome() {
           <button className="welcome-button" onClick={() => void createVault()} disabled={initializing}>
             <Plus size={18} />
             Create new vault
+          </button>
+          <button className="welcome-button" onClick={openImport} disabled={initializing}>
+            <Download size={18} />
+            Import notes
+          </button>
+          <button className="welcome-button" onClick={openVaults} disabled={initializing}>
+            <Layers size={18} />
+            Manage vaults
           </button>
         </div>
 

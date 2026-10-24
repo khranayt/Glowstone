@@ -25,6 +25,7 @@ pub struct Settings {
     pub auto_save: bool,
     pub spellcheck: bool,
     pub confirm_delete: bool,
+    pub onboarding_complete: bool,
     pub last_vault: Option<String>,
     pub recent_vaults: Vec<String>,
     pub recent_files: Vec<String>,
@@ -40,6 +41,7 @@ impl Default for Settings {
             auto_save: true,
             spellcheck: false,
             confirm_delete: true,
+            onboarding_complete: false,
             last_vault: None,
             recent_vaults: Vec::new(),
             recent_files: Vec::new(),
@@ -482,21 +484,36 @@ struct SearchFile {
     matches: Vec<SearchHit>,
 }
 
+fn clip_line(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let mut clipped: String = text.chars().take(max_chars).collect();
+    clipped.push('…');
+    clipped
+}
+
 #[tauri::command]
 fn search_vault(vault: String, query: String, case_sensitive: bool) -> Result<Vec<SearchFile>, String> {
     let root = PathBuf::from(&vault);
     if !root.is_dir() {
         return Err("Vault folder does not exist".into());
     }
-    let query = query.trim().to_string();
-    if query.is_empty() {
+    // All whitespace-separated terms must appear somewhere in the note. Matching
+    // at file level (instead of per line) is what people expect from full-text
+    // search: "rust graph" should find a note that mentions both, even on
+    // different lines. Lines are ranked by how many terms they contain.
+    let terms: Vec<String> = if case_sensitive {
+        query.split_whitespace().map(str::to_string).collect()
+    } else {
+        query
+            .split_whitespace()
+            .map(|term| term.to_lowercase())
+            .collect()
+    };
+    if terms.is_empty() {
         return Ok(Vec::new());
     }
-    let needle = if case_sensitive {
-        query.clone()
-    } else {
-        query.to_lowercase()
-    };
 
     let mut results: Vec<SearchFile> = Vec::new();
     let mut total_hits = 0usize;
@@ -522,30 +539,46 @@ fn search_vault(vault: String, query: String, case_sensitive: bool) -> Result<Ve
             continue;
         }
         let Ok(content) = fs::read_to_string(path) else { continue };
-        let mut matches = Vec::new();
+        let searchable = if case_sensitive {
+            content.clone()
+        } else {
+            content.to_lowercase()
+        };
+        if !terms.iter().all(|term| searchable.contains(term)) {
+            continue;
+        }
+        let mut line_hits: Vec<(usize, SearchHit)> = Vec::new();
         for (idx, line) in content.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
             let haystack = if case_sensitive {
                 line.to_string()
             } else {
                 line.to_lowercase()
             };
-            if haystack.contains(&needle) {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                matches.push(SearchHit {
-                    line: idx + 1,
-                    text: if line.len() > 300 {
-                        format!("{}…", &line[..300])
-                    } else {
-                        line.to_string()
+            let matched = terms.iter().filter(|term| haystack.contains(*term)).count();
+            if matched > 0 {
+                line_hits.push((
+                    matched,
+                    SearchHit {
+                        line: idx + 1,
+                        text: clip_line(trimmed, 300),
                     },
-                });
-                total_hits += 1;
-                if matches.len() >= 6 || total_hits >= 400 {
-                    break;
-                }
+                ));
+            }
+        }
+        if line_hits.is_empty() {
+            continue;
+        }
+        line_hits.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.line.cmp(&b.1.line)));
+        let mut matches: Vec<SearchHit> = Vec::new();
+        for (_, hit) in line_hits {
+            matches.push(hit);
+            total_hits += 1;
+            if matches.len() >= 8 || total_hits >= 400 {
+                break;
             }
         }
         if !matches.is_empty() {
@@ -559,8 +592,360 @@ fn search_vault(vault: String, query: String, case_sensitive: bool) -> Result<Ve
             });
         }
     }
-    results.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    results.sort_by(|a, b| {
+        b.matches
+            .len()
+            .cmp(&a.matches.len())
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+    });
     Ok(results)
+}
+
+// ---------------------------------------------------------------------------
+// Imports
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportResult {
+    path: String,
+    imported: usize,
+    skipped: usize,
+}
+
+fn xml_unescape(value: &str) -> String {
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+}
+
+fn parse_csv_row(line: &str) -> Vec<String> {
+    let mut cells = Vec::new();
+    let mut cell = String::new();
+    let mut quoted = false;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                cell.push('"');
+                chars.next();
+            }
+            '"' => quoted = !quoted,
+            ',' if !quoted => {
+                cells.push(cell.trim().to_string());
+                cell.clear();
+            }
+            _ => cell.push(ch),
+        }
+    }
+    cells.push(cell.trim().to_string());
+    cells
+}
+
+fn csv_to_markdown(raw: &str) -> String {
+    let rows: Vec<Vec<String>> = raw
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .take(400)
+        .map(parse_csv_row)
+        .collect();
+    if rows.is_empty() {
+        return String::new();
+    }
+    let width = rows.iter().map(Vec::len).max().unwrap_or(0).max(1);
+    let escape_cell = |cell: &String| cell.replace('|', "\\|").replace('\n', " ");
+    let pad = |row: &Vec<String>| {
+        let mut cells: Vec<String> = row.iter().map(escape_cell).collect();
+        while cells.len() < width {
+            cells.push(String::new());
+        }
+        cells
+    };
+    let header = pad(&rows[0]);
+    let mut out = format!("| {} |\n| {} |\n", header.join(" | "), vec!["---"; width].join(" | "));
+    for row in rows.iter().skip(1) {
+        out.push_str(&format!("| {} |\n", pad(row).join(" | ")));
+    }
+    out
+}
+
+fn copy_import_file(source: &Path, destination: &Path) -> Result<(), String> {
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::copy(source, destination)
+        .map(|_| ())
+        .map_err(|e| format!("Could not copy {}: {e}", source.display()))
+}
+
+fn write_import_text(destination: &Path, content: &str) -> Result<(), String> {
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(destination, content).map_err(|e| e.to_string())
+}
+
+fn is_importable_entry(entry: &walkdir::DirEntry, destination: &Path, skip_dirs: &[&str]) -> bool {
+    if entry.depth() == 0 {
+        return true;
+    }
+    let path = entry.path();
+    if path == destination || path.starts_with(destination) {
+        return false;
+    }
+    let name = entry.file_name().to_string_lossy();
+    if is_ignored_name(&name) || skip_dirs.iter().any(|skip| name.eq_ignore_ascii_case(skip)) {
+        return false;
+    }
+    true
+}
+
+fn import_tree(
+    source: &Path,
+    destination: &Path,
+    text_to_markdown: bool,
+    skip_dirs: &[&str],
+) -> Result<(usize, usize), String> {
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    let walker = WalkDir::new(source)
+        .into_iter()
+        .filter_entry(|entry| is_importable_entry(entry, destination, skip_dirs));
+    for entry in walker.flatten() {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let rel = match path.strip_prefix(source) {
+            Ok(rel) => rel,
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .unwrap_or_default();
+        let mut target = destination.join(rel);
+        let is_text = text_to_markdown && ext == "txt";
+        if is_text {
+            target.set_extension("md");
+        }
+        if let Err(error) = copy_import_file(path, &target) {
+            return Err(error);
+        }
+        if is_note(&target) {
+            imported += 1;
+        }
+    }
+    Ok((imported, skipped))
+}
+
+fn import_html_tree(source: &Path, destination: &Path) -> Result<(usize, usize), String> {
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    let walker = WalkDir::new(source)
+        .into_iter()
+        .filter_entry(|entry| is_importable_entry(entry, destination, &[]));
+    for entry in walker.flatten() {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let rel = match path.strip_prefix(source) {
+            Ok(rel) => rel,
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .unwrap_or_default();
+        let target = destination.join(rel);
+        if ext == "html" || ext == "htm" {
+            let raw = fs::read_to_string(path)
+                .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+            let markdown = html2md::parse_html(&raw);
+            let target = unique_path(
+                target.parent().unwrap_or(destination),
+                target
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Imported".into())
+                    .as_str(),
+                Some("md"),
+            );
+            write_import_text(&target, &markdown)?;
+            imported += 1;
+        } else if ext == "md" || ext == "markdown" {
+            copy_import_file(path, &target)?;
+            imported += 1;
+        } else if !ext.is_empty() {
+            copy_import_file(path, &target)?;
+        }
+    }
+    Ok((imported, skipped))
+}
+
+fn import_notion_export(source: &Path, destination: &Path) -> Result<(usize, usize), String> {
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    let walker = WalkDir::new(source)
+        .into_iter()
+        .filter_entry(|entry| is_importable_entry(entry, destination, &[]));
+    for entry in walker.flatten() {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let rel = match path.strip_prefix(source) {
+            Ok(rel) => rel,
+            Err(_) => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .unwrap_or_default();
+        let target = destination.join(rel);
+        match ext.as_str() {
+            "md" | "markdown" => {
+                copy_import_file(path, &target)?;
+                imported += 1;
+            }
+            "html" | "htm" => {
+                let raw = fs::read_to_string(path)
+                    .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+                let markdown = html2md::parse_html(&raw);
+                let target = unique_path(
+                    target.parent().unwrap_or(destination),
+                    target
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "Imported".into())
+                        .as_str(),
+                    Some("md"),
+                );
+                write_import_text(&target, &markdown)?;
+                imported += 1;
+            }
+            "csv" => {
+                let raw = fs::read_to_string(path)
+                    .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+                let markdown = csv_to_markdown(&raw);
+                let target = unique_path(
+                    target.parent().unwrap_or(destination),
+                    target
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "Imported".into())
+                        .as_str(),
+                    Some("md"),
+                );
+                write_import_text(&target, &markdown)?;
+                imported += 1;
+            }
+            _ => {
+                copy_import_file(path, &target)?;
+            }
+        }
+    }
+    Ok((imported, skipped))
+}
+
+fn import_evernote(source: &Path, destination: &Path) -> Result<(usize, usize), String> {
+    if !source.is_file() {
+        return Err("Choose an .enex file exported from Evernote".into());
+    }
+    let raw = fs::read_to_string(source).map_err(|e| format!("Could not read the export: {e}"))?;
+    let note_re = Regex::new(r"(?is)<note>(.*?)</note>").map_err(|e| e.to_string())?;
+    let title_re = Regex::new(r"(?is)<title>(.*?)</title>").map_err(|e| e.to_string())?;
+    let content_re = Regex::new(r"(?is)<content>(.*?)</content>").map_err(|e| e.to_string())?;
+    let mut imported = 0usize;
+    for note in note_re.captures_iter(&raw) {
+        let body = note.get(1).map(|m| m.as_str()).unwrap_or("");
+        let title = title_re
+            .captures(body)
+            .and_then(|cap| cap.get(1))
+            .map(|m| xml_unescape(m.as_str()).trim().to_string())
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| "Untitled note".to_string());
+        let content = content_re
+            .captures(body)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        let clean = content
+            .replace("<![CDATA[", "")
+            .replace("]]>", "");
+        let clean = if let (Some(start), Some(end)) = (clean.find("<en-note"), clean.rfind("</en-note>")) {
+            &clean[start..end + "</en-note>".len()]
+        } else {
+            clean.as_str()
+        };
+        let markdown = html2md::parse_html(clean);
+        let path = unique_path(destination, &sanitize_name(&title), Some("md"));
+        fs::write(&path, markdown).map_err(|e| e.to_string())?;
+        imported += 1;
+    }
+    if imported == 0 {
+        return Err("No notes were found in that Evernote export".into());
+    }
+    Ok((imported, 0))
+}
+
+#[tauri::command]
+fn import_vault(
+    kind: String,
+    source: String,
+    parent: String,
+    name: String,
+) -> Result<ImportResult, String> {
+    let source_path = PathBuf::from(&source);
+    if !source_path.exists() {
+        return Err("The selected source does not exist".into());
+    }
+    let parent_path = PathBuf::from(&parent);
+    if !parent_path.is_dir() {
+        return Err("Choose a folder for the imported vault".into());
+    }
+    let destination = unique_path(&parent_path, &sanitize_name(&name), None);
+    fs::create_dir_all(&destination).map_err(|e| format!("Could not create the vault: {e}"))?;
+
+    let result = match kind.as_str() {
+        "obsidian" => import_tree(&source_path, &destination, false, &[]),
+        "logseq" => import_tree(&source_path, &destination, false, &["logseq"]),
+        "markdown" => import_tree(&source_path, &destination, false, &[]),
+        "text" => import_tree(&source_path, &destination, true, &[]),
+        "html" => import_html_tree(&source_path, &destination),
+        "notion" => import_notion_export(&source_path, &destination),
+        "evernote" => import_evernote(&source_path, &destination),
+        _ => Err("Unknown import format".to_string()),
+    };
+
+    match result {
+        Ok((imported, skipped)) => Ok(ImportResult {
+            path: norm(&destination),
+            imported,
+            skipped,
+        }),
+        Err(error) => {
+            let _ = fs::remove_dir_all(&destination);
+            Err(error)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -941,8 +1326,120 @@ pub fn run() {
             file_exists,
             read_attachment,
             search_vault,
-            get_graph
+            get_graph,
+            import_vault
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glowstone");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let unique = format!(
+            "glowstone-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn imports_markdown_tree_and_skips_obsidian_settings() {
+        let root = scratch("obsidian");
+        let source = root.join("source");
+        fs::create_dir_all(source.join(".obsidian")).unwrap();
+        fs::create_dir_all(source.join("attachments")).unwrap();
+        fs::write(source.join("Note.md"), "# Hello").unwrap();
+        fs::write(source.join(".obsidian/app.json"), "{}").unwrap();
+        fs::write(source.join("attachments/image.png"), [0u8, 1, 2]).unwrap();
+        let destination = root.join("vault");
+        fs::create_dir_all(&destination).unwrap();
+
+        let (imported, _) = import_tree(&source, &destination, false, &[]).unwrap();
+        assert_eq!(imported, 1);
+        assert!(destination.join("Note.md").is_file());
+        assert!(destination.join("attachments/image.png").is_file());
+        assert!(!destination.join(".obsidian").exists());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn converts_text_and_html_notes() {
+        let root = scratch("convert");
+        let source = root.join("source");
+        fs::create_dir_all(source.join("nested")).unwrap();
+        fs::write(source.join("plain.txt"), "plain text").unwrap();
+        fs::write(
+            source.join("nested/page.html"),
+            "<html><body><h1>Hello</h1><p>World</p></body></html>",
+        )
+        .unwrap();
+        let destination = root.join("vault");
+        fs::create_dir_all(&destination).unwrap();
+
+        let (imported, _) = import_tree(&source, &destination, true, &[]).unwrap();
+        assert_eq!(imported, 1);
+        assert!(destination.join("plain.md").is_file());
+
+        let (converted, _) = import_html_tree(&source, &destination).unwrap();
+        assert!(converted >= 1);
+        let html_note = destination.join("nested/page.md");
+        assert!(html_note.is_file());
+        let text = fs::read_to_string(html_note).unwrap();
+        assert!(text.contains("Hello"));
+        assert!(text.contains("World"));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn imports_notion_csv_and_evernote() {
+        let root = scratch("notion");
+        let source = root.join("source");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("Database.csv"), "Name,Status\nAlpha,Done\n").unwrap();
+        fs::write(source.join("Page.html"), "<h2>Page</h2>").unwrap();
+        let destination = root.join("vault");
+        fs::create_dir_all(&destination).unwrap();
+
+        let (imported, _) = import_notion_export(&source, &destination).unwrap();
+        assert_eq!(imported, 2);
+        let table = fs::read_to_string(destination.join("Database.md")).unwrap();
+        assert!(table.contains("| Name | Status |"));
+        assert!(table.contains("| Alpha | Done |"));
+
+        let enex = root.join("export.enex");
+        fs::write(
+            &enex,
+            r#"<en-export><note><title>My note</title><content><![CDATA[<?xml version="1.0"?><en-note><div>Hello Evernote</div></en-note>]]></content></note></en-export>"#,
+        )
+        .unwrap();
+        let (imported, _) = import_evernote(&enex, &destination).unwrap();
+        assert_eq!(imported, 1);
+        let note = fs::read_to_string(destination.join("My note.md")).unwrap();
+        assert!(note.contains("Hello Evernote"));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn search_handles_long_unicode_lines_without_panicking() {
+        let root = scratch("search");
+        let vault = root.join("vault");
+        fs::create_dir_all(&vault).unwrap();
+        let long = format!("{} needle", "🦀".repeat(400));
+        fs::write(vault.join("Long.md"), format!("{long}\nsecond line needle\n")).unwrap();
+        let results = search_vault(vault.to_string_lossy().to_string(), "needle".into(), false).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].matches.is_empty());
+        assert!(results[0].matches[0].text.chars().count() <= 301);
+        fs::remove_dir_all(root).ok();
+    }
 }

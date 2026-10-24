@@ -14,12 +14,15 @@ import {
   titleFromPath,
   uid,
 } from "./lib/utils";
-import { loadWorkspace } from "./lib/workspace";
+import { loadWorkspace, saveWorkspace } from "./lib/workspace";
 import type {
   ConfirmOptions,
   ContextMenuState,
   FileNode,
   GraphData,
+  GraphScope,
+  ImportKind,
+  ImportResult,
   JumpRequest,
   MenuItem,
   NoteMode,
@@ -44,6 +47,7 @@ export const defaultSettings: Settings = {
   autoSave: true,
   spellcheck: false,
   confirmDelete: true,
+  onboardingComplete: false,
   lastVault: null,
   recentVaults: [],
   recentFiles: [],
@@ -75,6 +79,9 @@ interface AppState {
   renamingPath: string | null;
   graph: GraphData | null;
   graphLoading: boolean;
+  graphFocusPath: string | null;
+  graphScope: GraphScope;
+  graphDepth: number;
   savingCount: number;
   cursor: { line: number; col: number };
   searchQuery: string;
@@ -85,6 +92,8 @@ interface AppState {
   paletteOpen: boolean;
   settingsOpen: boolean;
   settingsSection: SettingsSection;
+  importOpen: boolean;
+  vaultsOpen: boolean;
   vaultMenuOpen: boolean;
   confirm: ConfirmOptions | null;
   prompt: PromptOptions | null;
@@ -98,6 +107,7 @@ interface AppState {
   createVault: () => Promise<void>;
   closeVault: () => Promise<void>;
   switchVault: () => Promise<void>;
+  removeRecentVault: (path: string) => void;
   refreshTree: () => Promise<void>;
   refreshGraph: () => Promise<void>;
   setSidebarView: (view: SidebarView) => void;
@@ -108,6 +118,7 @@ interface AppState {
   toggleRightPanel: (panel?: RightPanel) => void;
   setExpanded: (path: string, value: boolean) => void;
   toggleFolder: (path: string) => void;
+  toggleFolders: () => void;
   expandToPath: (path: string) => void;
   selectPath: (path: string | null) => void;
   startRename: (path: string | null) => void;
@@ -119,6 +130,9 @@ interface AppState {
   movePath: (path: string, targetDir: string) => Promise<void>;
   openNote: (path: string, opts?: OpenNoteOptions) => Promise<string | null>;
   openGraphTab: () => void;
+  setGraphFocusPath: (path: string | null) => void;
+  setGraphScope: (scope: GraphScope) => void;
+  setGraphDepth: (depth: number) => void;
   newTab: () => void;
   closeTab: (id: string) => Promise<void>;
   activateTab: (id: string) => void;
@@ -142,6 +156,16 @@ interface AppState {
   closePalette: () => void;
   openSettings: (section?: SettingsSection) => void;
   closeSettings: () => void;
+  openImport: () => void;
+  closeImport: () => void;
+  openVaults: () => void;
+  closeVaults: () => void;
+  importVault: (
+    kind: ImportKind,
+    source: string,
+    parent: string,
+    name: string,
+  ) => Promise<ImportResult | null>;
   setVaultMenuOpen: (open: boolean) => void;
   setConfirm: (options: ConfirmOptions | null) => void;
   setPrompt: (options: PromptOptions | null) => void;
@@ -243,6 +267,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   renamingPath: null,
   graph: null,
   graphLoading: false,
+  graphFocusPath: null,
+  graphScope: "global",
+  graphDepth: 2,
   savingCount: 0,
   cursor: { line: 1, col: 1 },
   searchQuery: "",
@@ -253,6 +280,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   paletteOpen: false,
   settingsOpen: false,
   settingsSection: "appearance",
+  importOpen: false,
+  vaultsOpen: false,
   vaultMenuOpen: false,
   confirm: null,
   prompt: null,
@@ -278,6 +307,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async openVaultByPath(path) {
+    const previous = get();
+    if (previous.vault && previous.vault.path !== path) {
+      await previous.saveAll();
+      const active = previous.tabs.find((tab) => tab.id === previous.activeTabId);
+      saveWorkspace(previous.vault.path, {
+        tabs: previous.tabs
+          .filter((tab) => tab.kind === "note" && tab.path)
+          .map((tab) => ({ path: tab.path!, mode: tab.mode })),
+        activePath: active?.kind === "note" ? active.path ?? null : null,
+        sidebarView: previous.sidebarView,
+        sidebarOpen: previous.sidebarOpen,
+        rightPanelOpen: previous.rightPanelOpen,
+        rightPanel: previous.rightPanel,
+        expanded: previous.expanded,
+        sidebarWidth: previous.sidebarWidth,
+      });
+    }
     set({ initializing: true, loginError: null });
     try {
       const vault = await api.openVault(path);
@@ -310,6 +356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           for (const folder of ancestorsOf(vault.path, tab.path)) expanded[folder] = true;
         }
       }
+      const restoredView: SidebarView = ws.sidebarView === "search" ? "search" : "files";
       set({
         vault,
         settings: { ...defaultSettings, ...settings },
@@ -317,18 +364,25 @@ export const useAppStore = create<AppState>((set, get) => ({
         tabs,
         activeTabId: active.id,
         selectedPath: active.path ?? null,
-        sidebarView: ws.sidebarView,
+        sidebarView: restoredView,
         sidebarOpen: ws.sidebarOpen,
         sidebarWidth: Math.min(480, Math.max(200, ws.sidebarWidth || 280)),
         rightPanelOpen: ws.rightPanelOpen,
         rightPanel: ws.rightPanel,
         expanded,
+        renamingPath: null,
+        searchQuery: "",
+        searchResults: [],
+        searchLoading: false,
+        graphFocusPath: null,
+        graphScope: "global",
         initializing: false,
         ready: true,
         graph: null,
         graphLoading: true,
       });
       applyTheme(get().settings.theme);
+      if (!get().settings.onboardingComplete) get().updateSettings({ onboardingComplete: true });
       void get().refreshGraph();
     } catch (error) {
       set({ initializing: false, ready: true });
@@ -392,18 +446,32 @@ export const useAppStore = create<AppState>((set, get) => ({
       tabs: [],
       activeTabId: null,
       graph: null,
+      graphFocusPath: null,
+      graphScope: "global",
       searchQuery: "",
       searchResults: [],
+      searchLoading: false,
       selectedPath: null,
+      renamingPath: null,
+      sidebarView: "files",
       expanded: {},
       ready: true,
-      settings: { ...get().settings, lastVault: null },
+      settings: { ...get().settings, lastVault: null, onboardingComplete: true },
     });
+    api.saveSettings(get().settings).catch(() => undefined);
   },
 
   async switchVault() {
     set({ vaultMenuOpen: false });
     await get().chooseVault();
+  },
+
+  removeRecentVault(path) {
+    const settings = get().settings;
+    get().updateSettings({
+      recentVaults: settings.recentVaults.filter((item) => item !== path),
+      lastVault: settings.lastVault === path ? null : settings.lastVault,
+    });
   },
 
   async refreshTree() {
@@ -473,6 +541,25 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleFolder(path) {
     set((s) => ({ expanded: { ...s.expanded, [path]: !s.expanded[path] } }));
+  },
+
+  toggleFolders() {
+    const state = get();
+    const folders: string[] = [];
+    const collect = (nodes: FileNode[]) => {
+      for (const node of nodes) {
+        if (node.isDir) {
+          folders.push(node.path);
+          collect(node.children);
+        }
+      }
+    };
+    collect(state.tree);
+    if (folders.length === 0) return;
+    const allOpen = folders.every((path) => state.expanded[path]);
+    const expanded = { ...state.expanded };
+    for (const path of folders) expanded[path] = !allOpen;
+    set({ expanded });
   },
 
   expandToPath(path) {
@@ -718,6 +805,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     let tabId: string;
     if (replaceActive && active && activeIndex >= 0) {
+      // Never discard unsaved edits when a note is replaced in the active tab.
+      if (active.kind === "note" && active.content !== active.savedContent) {
+        await get().saveTab(active.id);
+      }
       const history =
         active.kind === "note" && active.path
           ? [...active.history.slice(0, active.historyIndex + 1), path]
@@ -766,6 +857,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   openGraphTab() {
     const state = get();
     const active = activeTabOf(state.tabs, state.activeTabId);
+    const focusPath = active?.kind === "note" ? active.path ?? null : state.graphFocusPath;
+    const existing = state.tabs.find((tab) => tab.kind === "graph");
+    if (existing) {
+      set({
+        activeTabId: existing.id,
+        selectedPath: null,
+        graphFocusPath: focusPath,
+        graphScope: "global",
+      });
+      if (!state.graph && !state.graphLoading) void get().refreshGraph();
+      return;
+    }
     const tab: Tab = {
       id: uid(),
       kind: "graph",
@@ -781,11 +884,31 @@ export const useAppStore = create<AppState>((set, get) => ({
         tabs: s.tabs.map((t) => (t.id === active.id ? tab : t)),
         activeTabId: tab.id,
         selectedPath: null,
+        graphFocusPath: focusPath,
+        graphScope: "global",
       }));
     } else {
-      set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, selectedPath: null }));
+      set((s) => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+        selectedPath: null,
+        graphFocusPath: focusPath,
+        graphScope: "global",
+      }));
     }
     if (!state.graph && !state.graphLoading) void get().refreshGraph();
+  },
+
+  setGraphFocusPath(path) {
+    set({ graphFocusPath: path });
+  },
+
+  setGraphScope(scope) {
+    set({ graphScope: scope });
+  },
+
+  setGraphDepth(depth) {
+    set({ graphDepth: Math.min(4, Math.max(1, depth)) });
   },
 
   newTab() {
@@ -1030,6 +1153,47 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   closeSettings() {
     set({ settingsOpen: false });
+  },
+  openImport() {
+    set({
+      importOpen: true,
+      paletteOpen: false,
+      switcherOpen: false,
+      vaultMenuOpen: false,
+      settingsOpen: false,
+      vaultsOpen: false,
+    });
+  },
+  closeImport() {
+    set({ importOpen: false });
+    if (!get().vault && !get().settings.onboardingComplete) {
+      get().updateSettings({ onboardingComplete: true });
+    }
+  },
+  openVaults() {
+    set({
+      vaultsOpen: true,
+      importOpen: false,
+      paletteOpen: false,
+      switcherOpen: false,
+      vaultMenuOpen: false,
+      settingsOpen: false,
+    });
+  },
+  closeVaults() {
+    set({ vaultsOpen: false });
+  },
+  async importVault(kind, source, parent, name) {
+    try {
+      const result = await api.importVault(kind, source, parent, name);
+      await get().openVaultByPath(result.path);
+      const label = result.imported === 1 ? "note" : "notes";
+      get().toast(`Imported ${result.imported} ${label}`, "success");
+      return result;
+    } catch (error) {
+      get().toast(`Import failed: ${String(error)}`, "error");
+      return null;
+    }
   },
   setVaultMenuOpen(open) {
     set({ vaultMenuOpen: open });

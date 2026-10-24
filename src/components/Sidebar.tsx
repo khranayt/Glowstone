@@ -1,18 +1,14 @@
 import {
   FolderPlus,
   ListCollapse,
-  Maximize2,
-  RefreshCw,
   Search,
   SquarePen,
   X,
-  Waypoints,
   Files,
 } from "lucide-react";
 import { useAppStore } from "../store";
 import { FileExplorer } from "./FileExplorer";
 import { SearchPanel } from "./SearchPanel";
-import { GraphPanel } from "./GraphPanel";
 
 export function Sidebar() {
   const view = useAppStore((s) => s.sidebarView);
@@ -20,15 +16,14 @@ export function Sidebar() {
   const createNote = useAppStore((s) => s.createNote);
   const createFolder = useAppStore((s) => s.createFolder);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
-  const openGraphTab = useAppStore((s) => s.openGraphTab);
-  const refreshGraph = useAppStore((s) => s.refreshGraph);
-  const title = view === "files" ? vault?.name ?? "Files" : view === "search" ? "Search" : "Graph";
+  const toggleFolders = useAppStore((s) => s.toggleFolders);
+  const title = view === "files" ? vault?.name ?? "Files" : "Search";
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-title">
-          {view === "files" ? <Files size={15} /> : view === "search" ? <Search size={15} /> : <Waypoints size={15} />}
+          {view === "files" ? <Files size={15} /> : <Search size={15} />}
           <span title={vault?.name}>{title}</span>
         </div>
         <div className="sidebar-actions">
@@ -52,31 +47,11 @@ export function Sidebar() {
               </button>
               <button
                 className="icon-button"
-                onClick={() => useAppStore.setState({ expanded: {} })}
-                title="Collapse all folders"
-                aria-label="Collapse all folders"
+                onClick={toggleFolders}
+                title="Collapse or expand all folders"
+                aria-label="Collapse or expand all folders"
               >
                 <ListCollapse size={16} />
-              </button>
-            </>
-          )}
-          {view === "graph" && (
-            <>
-              <button
-                className="icon-button"
-                onClick={() => void refreshGraph()}
-                title="Refresh graph"
-                aria-label="Refresh graph"
-              >
-                <RefreshCw size={15} />
-              </button>
-              <button
-                className="icon-button"
-                onClick={openGraphTab}
-                title="Open graph in a tab"
-                aria-label="Open graph in a tab"
-              >
-                <Maximize2 size={15} />
               </button>
             </>
           )}
@@ -93,7 +68,6 @@ export function Sidebar() {
       <div className="sidebar-content">
         {view === "files" && <FileExplorer />}
         {view === "search" && <SearchPanel />}
-        {view === "graph" && <GraphPanel />}
       </div>
     </aside>
   );

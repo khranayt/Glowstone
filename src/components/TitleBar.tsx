@@ -10,6 +10,8 @@ import {
   Info,
   FilePlus2,
   FolderPlus,
+  Download,
+  Layers,
   XCircle,
 } from "lucide-react";
 import { useAppStore } from "../store";
@@ -32,6 +34,8 @@ export function TitleBar() {
   const openVaultByPath = useAppStore((s) => s.openVaultByPath);
   const closeVault = useAppStore((s) => s.closeVault);
   const openSettings = useAppStore((s) => s.openSettings);
+  const openImport = useAppStore((s) => s.openImport);
+  const openVaults = useAppStore((s) => s.openVaults);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const refreshTree = useAppStore((s) => s.refreshTree);
   const refreshGraph = useAppStore((s) => s.refreshGraph);
@@ -122,6 +126,26 @@ export function TitleBar() {
               >
                 <Plus size={15} />
                 <span>Create new vault…</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  openVaults();
+                }}
+              >
+                <Layers size={15} />
+                <span>Manage vaults…</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  openImport();
+                }}
+              >
+                <Download size={15} />
+                <span>Import notes…</span>
               </button>
               {settings.recentVaults.filter((path) => path !== vault?.path).length > 0 && (
                 <>
@@ -249,6 +273,27 @@ export function TitleBar() {
               >
                 <Info size={15} />
                 <span>About Glowstone</span>
+              </button>
+              <div className="menu-separator" />
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  openVaults();
+                }}
+              >
+                <Layers size={15} />
+                <span>Manage vaults…</span>
+              </button>
+              <button
+                className="menu-item"
+                onClick={() => {
+                  close();
+                  openImport();
+                }}
+              >
+                <Download size={15} />
+                <span>Import notes…</span>
               </button>
               <div className="menu-separator" />
               <button

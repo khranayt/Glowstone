@@ -1,5 +1,6 @@
 export type Theme = "dark" | "light";
-export type SidebarView = "files" | "search" | "graph";
+export type SidebarView = "files" | "search";
+export type GraphScope = "global" | "local";
 export type RightPanel = "outline" | "backlinks";
 export type NoteMode = "edit" | "read";
 
@@ -11,6 +12,7 @@ export interface Settings {
   autoSave: boolean;
   spellcheck: boolean;
   confirmDelete: boolean;
+  onboardingComplete: boolean;
   lastVault: string | null;
   recentVaults: string[];
   recentFiles: string[];
@@ -47,6 +49,21 @@ export interface GraphLink {
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
+}
+
+export type ImportKind =
+  | "obsidian"
+  | "logseq"
+  | "markdown"
+  | "text"
+  | "html"
+  | "notion"
+  | "evernote";
+
+export interface ImportResult {
+  path: string;
+  imported: number;
+  skipped: number;
 }
 
 export interface SearchHit {

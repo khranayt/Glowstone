@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Maximize2, Waypoints } from "lucide-react";
 import { useAppStore } from "../store";
 import { GraphCanvas } from "./GraphCanvas";
 
 export function GraphPanel() {
+  const [depth, setDepth] = useState(2);
   const graph = useAppStore((s) => s.graph);
   const loading = useAppStore((s) => s.graphLoading);
   const openGraphTab = useAppStore((s) => s.openGraphTab);
@@ -18,13 +19,49 @@ export function GraphPanel() {
     return tab.path.slice(s.vault.path.length + 1).replace(/\.(md|markdown)$/i, "");
   });
 
-  const stats = useMemo(() => {
-    if (!graph) return { notes: 0, links: 0 };
+  // A local graph: the open note plus its neighbours, limited to `depth` hops.
+  const localGraph = useMemo(() => {
+    if (!graph) return null;
+    if (!activeId || !graph.nodes.some((node) => node.id === activeId)) return graph;
+
+    const adjacency = new Map<string, string[]>();
+    for (const link of graph.links) {
+      const from = adjacency.get(link.source);
+      if (from) from.push(link.target);
+      else adjacency.set(link.source, [link.target]);
+      const to = adjacency.get(link.target);
+      if (to) to.push(link.source);
+      else adjacency.set(link.target, [link.source]);
+    }
+
+    const keep = new Set([activeId]);
+    let frontier = [activeId];
+    for (let hop = 0; hop < depth; hop += 1) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const neighbour of adjacency.get(id) ?? []) {
+          if (keep.has(neighbour)) continue;
+          keep.add(neighbour);
+          next.push(neighbour);
+        }
+      }
+      if (next.length === 0) break;
+      frontier = next;
+    }
+
     return {
-      notes: graph.nodes.filter((node) => !node.unresolved).length,
-      links: graph.links.length,
+      nodes: graph.nodes.filter((node) => keep.has(node.id)),
+      links: graph.links.filter((link) => keep.has(link.source) && keep.has(link.target)),
     };
-  }, [graph]);
+  }, [graph, activeId, depth]);
+
+  const stats = useMemo(() => {
+    if (!localGraph) return { notes: 0, links: 0 };
+    return {
+      notes: localGraph.nodes.filter((node) => !node.unresolved).length,
+      links: localGraph.links.length,
+    };
+  }, [localGraph]);
 
   return (
     <div className="graph-panel">
@@ -36,12 +73,27 @@ export function GraphPanel() {
         <span>
           {stats.links} {stats.links === 1 ? "link" : "links"}
         </span>
+        {activeId && (
+          <div className="graph-panel-depth" role="group" aria-label="Local graph depth">
+            {[1, 2, 3].map((value) => (
+              <button
+                key={value}
+                className={depth === value ? "active" : ""}
+                onClick={() => setDepth(value)}
+                title={`${value} ${value === 1 ? "hop" : "hops"} from the open note`}
+                aria-pressed={depth === value}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="graph-panel-canvas">
-        {graph && graph.nodes.length > 0 ? (
+        {localGraph && localGraph.nodes.length > 0 ? (
           <GraphCanvas
             compact
-            data={graph}
+            data={localGraph}
             activeId={activeId}
             labels={false}
             repulsion={900}
@@ -70,7 +122,7 @@ export function GraphPanel() {
       </button>
       {activePath && (
         <div className="graph-panel-note" title={activePath}>
-          Local graph is centred on the open note.
+          Local graph · {depth} {depth === 1 ? "hop" : "hops"} from the open note.
         </div>
       )}
     </div>

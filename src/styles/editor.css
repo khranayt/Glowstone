@@ -1,0 +1,544 @@
+/* ==========================================================================
+   Glowstone — CodeMirror editor and live preview
+   ========================================================================== */
+
+.editor-host {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  color: var(--text-normal);
+  font-family: var(--font-text);
+  font-size: var(--editor-font-size, 16px);
+}
+
+.editor-host .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor-host .cm-scroller {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+  font-family: var(--font-text);
+  font-size: var(--editor-font-size, 16px);
+  line-height: 1.75;
+  scrollbar-width: thin;
+}
+
+.editor-host .cm-content {
+  padding: 2px 0 38vh;
+  caret-color: var(--interactive-accent);
+  font-family: var(--font-text);
+}
+
+.editor-host .cm-line {
+  padding: 0 4px;
+}
+
+.editor-host .cm-line ::selection,
+.editor-host .cm-content ::selection {
+  background: var(--text-selection);
+}
+
+.editor-host .cm-cursor,
+.editor-host .cm-dropCursor {
+  border-left-color: var(--interactive-accent);
+  border-left-width: 2px;
+}
+
+.editor-host .cm-selectionBackground {
+  background: var(--text-selection) !important;
+}
+
+.editor-host .cm-focused .cm-selectionBackground {
+  background: var(--text-selection) !important;
+}
+
+.editor-host .cm-selectionMatch {
+  background: var(--text-selection-match);
+  border-radius: 2px;
+}
+
+.editor-host .cm-searchMatch {
+  background: var(--text-highlight);
+  border-radius: 2px;
+}
+
+.editor-host .cm-searchMatch.cm-searchMatch-selected {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* gutters */
+
+.editor-host .cm-gutters {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+}
+
+.editor-host .cm-lineNumbers .cm-gutterElement {
+  min-width: 24px;
+  padding: 0 7px 0 2px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  opacity: 0.75;
+}
+
+.editor-host .cm-activeLineGutter {
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.editor-host .cm-activeLine {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------- typography -- */
+
+.editor-host .cm-line.cm-heading-1,
+.editor-host .cm-line.cm-heading-2,
+.editor-host .cm-line.cm-heading-3,
+.editor-host .cm-line.cm-heading-4,
+.editor-host .cm-line.cm-heading-5,
+.editor-host .cm-line.cm-heading-6 {
+  color: var(--text-normal);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.editor-host .cm-line.cm-heading-1 {
+  padding-top: 0.42em;
+  padding-bottom: 0.06em;
+  font-size: 1.82em;
+  line-height: 1.3;
+}
+
+.editor-host .cm-line.cm-heading-2 {
+  padding-top: 0.42em;
+  padding-bottom: 0.05em;
+  font-size: 1.46em;
+  line-height: 1.35;
+}
+
+.editor-host .cm-line.cm-heading-3 {
+  padding-top: 0.34em;
+  font-size: 1.23em;
+  line-height: 1.4;
+}
+
+.editor-host .cm-line.cm-heading-4 {
+  padding-top: 0.28em;
+  font-size: 1.09em;
+  line-height: 1.5;
+}
+
+.editor-host .cm-line.cm-heading-5 {
+  padding-top: 0.24em;
+  font-size: 1em;
+  line-height: 1.6;
+}
+
+.editor-host .cm-line.cm-heading-6 {
+  padding-top: 0.24em;
+  color: var(--text-muted);
+  font-size: 0.96em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.editor-host .cm-line.cm-quote-line {
+  margin: 0.12em 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--background-modifier-border-strong);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.editor-host .cm-line.cm-code-line {
+  padding-left: 14px;
+  background: var(--code-background);
+  color: var(--text-normal);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  line-height: 1.65;
+}
+
+.editor-host .cm-line.cm-code-line.cm-code-fence {
+  color: var(--text-faint);
+  font-size: 0.8em;
+}
+
+.editor-host .cm-line.cm-code-line.cm-code-start {
+  padding-top: 5px;
+  border-radius: 7px 7px 0 0;
+}
+
+.editor-host .cm-line.cm-code-line.cm-code-end {
+  padding-bottom: 5px;
+  border-radius: 0 0 7px 7px;
+}
+
+.editor-host .cm-code-lang {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Callouts keep the quote frame but tint it by kind. */
+.editor-host .cm-line.cm-callout-line {
+  margin: 0;
+  padding-left: 30px;
+  border-left: 2px solid var(--callout-accent, var(--interactive-accent));
+  background: color-mix(in srgb, var(--callout-accent, var(--interactive-accent)) 8%, transparent);
+  color: var(--text-normal);
+}
+
+.editor-host .cm-line.cm-callout-first {
+  padding-top: 5px;
+  padding-left: 14px;
+  border-radius: 6px 0 0 0;
+  font-weight: 650;
+}
+
+.editor-host .cm-line.cm-callout-last {
+  padding-bottom: 5px;
+  border-radius: 0 0 0 6px;
+}
+
+.editor-host .cm-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 3px;
+  color: var(--callout-accent, var(--text-accent));
+  vertical-align: -3px;
+}
+
+.editor-host .cm-callout-icon svg {
+  display: block;
+}
+
+.editor-host .cm-line.cm-callout-note,
+.editor-host .cm-line.cm-callout-todo {
+  --callout-accent: var(--interactive-accent);
+}
+
+.editor-host .cm-line.cm-callout-tip,
+.editor-host .cm-line.cm-callout-success {
+  --callout-accent: var(--success);
+}
+
+.editor-host .cm-line.cm-callout-info {
+  --callout-accent: #4f9cd8;
+}
+
+.editor-host .cm-line.cm-callout-warning {
+  --callout-accent: #e0a23c;
+}
+
+.editor-host .cm-line.cm-callout-danger,
+.editor-host .cm-line.cm-callout-bug {
+  --callout-accent: var(--danger);
+}
+
+.editor-host .cm-line.cm-callout-question {
+  --callout-accent: #d9a441;
+}
+
+.editor-host .cm-line.cm-callout-quote {
+  --callout-accent: var(--text-faint);
+}
+
+.editor-host .cm-line.cm-list-line {
+  padding-left: 8px;
+}
+
+.editor-host .cm-list-bullet {
+  position: relative;
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+}
+
+.editor-host .cm-list-bullet::before {
+  content: "";
+  position: absolute;
+  top: 0.58em;
+  left: 0.12em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.editor-host .cm-task-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 15px;
+  height: 15px;
+  margin: 0 6px 0 1px;
+  border: 1.5px solid var(--background-modifier-border-strong);
+  border-radius: 3.5px;
+  background: transparent;
+  vertical-align: -2px;
+  cursor: pointer;
+  transition: background var(--base-transition), border-color var(--base-transition);
+}
+
+.editor-host .cm-task-checkbox:hover {
+  border-color: var(--interactive-accent);
+}
+
+.editor-host .cm-task-checkbox:checked {
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+}
+
+.editor-host .cm-task-checkbox:checked::after {
+  content: "";
+  width: 8px;
+  height: 4px;
+  border: 1.5px solid var(--text-on-accent);
+  border-top: 0;
+  border-right: 0;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+/* ------------------------------------------------------------ inlines -- */
+
+.editor-host .cm-strong {
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+.editor-host .cm-emphasis {
+  font-style: italic;
+}
+
+.editor-host .cm-strike {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.editor-host .cm-highlight {
+  padding: 0.06em 1px;
+  border-radius: 2px;
+  background: var(--text-highlight);
+}
+
+.editor-host .cm-inline-code {
+  padding: 0.1em 0.32em;
+  border: 1px solid var(--code-border);
+  border-radius: 4px;
+  background: var(--code-background-inline);
+  color: var(--code-text);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+
+.editor-host .cm-wikilink,
+.editor-host .cm-md-link,
+.editor-host .cm-url {
+  color: var(--text-accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.editor-host .cm-wikilink:hover,
+.editor-host .cm-md-link:hover,
+.editor-host .cm-url:hover {
+  text-decoration: underline;
+}
+
+.editor-host .cm-embed {
+  color: var(--text-accent);
+  text-decoration: none;
+}
+
+.editor-host .cm-tag {
+  padding: 0.12em 0.45em;
+  border-radius: 9px;
+  background: var(--interactive-accent-soft);
+  color: var(--text-accent);
+  font-size: 0.9em;
+}
+
+.editor-host .cm-syntax-meta {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.editor-host .cm-syntax-link {
+  color: var(--text-accent);
+}
+
+.editor-host .cm-syntax-url {
+  color: var(--text-accent);
+}
+
+.editor-host .cm-syntax-code {
+  color: var(--code-text);
+  font-family: var(--font-mono);
+}
+
+.editor-host .cm-syntax-quote {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------- widgets -- */
+
+.editor-host .cm-image-widget {
+  display: block;
+  margin: 10px 0;
+  line-height: 0;
+}
+
+.editor-host .cm-image-widget img {
+  display: block;
+  max-width: 100%;
+  max-height: 62vh;
+  border-radius: 7px;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.editor-host .cm-image-widget-error {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px dashed var(--background-modifier-border-strong);
+  border-radius: var(--radius-s);
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.editor-host .cm-hr-widget {
+  display: block;
+  height: 1px;
+  margin: 1.5em 0;
+  background: var(--background-modifier-border-strong);
+}
+
+/* ------------------------------------------------------ syntax colours -- */
+
+.editor-host .cm-hl-keyword {
+  color: var(--hljs-keyword);
+}
+
+.editor-host .cm-hl-string {
+  color: var(--hljs-string);
+}
+
+.editor-host .cm-hl-comment {
+  color: var(--hljs-comment);
+  font-style: italic;
+}
+
+.editor-host .cm-hl-number {
+  color: var(--hljs-number);
+}
+
+.editor-host .cm-hl-atom {
+  color: var(--hljs-atom);
+}
+
+.editor-host .cm-hl-function {
+  color: var(--hljs-function);
+}
+
+.editor-host .cm-hl-type {
+  color: var(--hljs-type);
+}
+
+.editor-host .cm-hl-tag {
+  color: var(--hljs-tag);
+}
+
+.editor-host .cm-hl-attribute {
+  color: var(--hljs-attribute);
+}
+
+/* -------------------------------------------------------- search panel -- */
+
+.editor-host .cm-panels {
+  border-color: var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.editor-host .cm-panels.cm-panels-top {
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.editor-host .cm-textfield {
+  height: 27px;
+  padding: 0 7px;
+  border: 1px solid var(--background-modifier-border-strong);
+  border-radius: var(--radius-xs);
+  outline: none;
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  font-size: 12px;
+}
+
+.editor-host .cm-textfield:focus {
+  border-color: var(--interactive-accent);
+}
+
+.editor-host .cm-button {
+  height: 27px;
+  padding: 0 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-xs);
+  background: var(--interactive-normal);
+  background-image: none;
+  color: var(--text-normal);
+  font-size: 11.5px;
+}
+
+.editor-host .cm-button:hover {
+  background: var(--interactive-hover);
+}
+
+.editor-host .cm-panel.cm-search label {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.editor-host .cm-placeholder {
+  color: var(--text-faint);
+  font-style: normal;
+}
+
+/* Focus ring is handled by the note surface. */
+.editor-host .cm-editor.cm-focused .cm-matchingBracket {
+  background: var(--interactive-accent-soft);
+  outline: 1px solid var(--interactive-accent-border);
+}
+
+.editor-host .cm-nonmatchingBracket {
+  color: var(--danger);
+}

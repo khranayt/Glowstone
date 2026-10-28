@@ -597,3 +597,61 @@
 .editor-host .cm-table-widget tbody tr:hover {
   background: var(--background-modifier-hover);
 }
+
+/* ---------------------------------------------------- link suggestions -- */
+
+.cm-tooltip.cm-tooltip-autocomplete {
+  padding: 3px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-m);
+  overflow: hidden;
+}
+
+.cm-tooltip-autocomplete > ul {
+  max-height: 260px;
+  font-family: var(--font-ui);
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.cm-editor .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.cm-tooltip-autocomplete .cm-completionMatchedText {
+  color: var(--interactive-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cm-tooltip-autocomplete .cm-completionLabel {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-tooltip-autocomplete .cm-completionDetail {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-style: normal;
+}

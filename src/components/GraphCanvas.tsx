@@ -84,8 +84,8 @@ const paletteFor = (dark: boolean): Palette =>
         unresolvedHover: "#d2d2c8",
         nodeHover: "#f4d47c",
         active: "#ffe09a",
-        edge: "rgba(180,180,180,0.30)",
-        edgeActive: "rgba(224,190,106,0.66)",
+        edge: "rgba(198,198,198,0.55)",
+        edgeActive: "rgba(244,212,124,0.95)",
         label: "#b8b8b8",
         labelHalo: "rgba(24,24,24,0.9)",
       }
@@ -95,8 +95,8 @@ const paletteFor = (dark: boolean): Palette =>
         unresolvedHover: "#3f3b34",
         nodeHover: "#8d6a13",
         active: "#7a5b0d",
-        edge: "rgba(80,80,80,0.26)",
-        edgeActive: "rgba(146,110,26,0.55)",
+        edge: "rgba(70,70,70,0.45)",
+        edgeActive: "rgba(146,110,26,0.8)",
         label: "#575757",
         labelHalo: "rgba(255,255,255,0.92)",
       };
@@ -441,7 +441,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
       ctx.scale(k, k);
 
       // Edges.
-      ctx.lineWidth = 1 / k;
+      ctx.lineWidth = 1.35 / k;
       for (const link of sim.links) {
         const highlighted =
           focusNode != null && (link.source === focusNode || link.target === focusNode);
@@ -452,10 +452,10 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
         if (missing) {
           // Links to notes that do not exist stay visible but recede.
           ctx.setLineDash([4 / k, 4 / k]);
-          ctx.globalAlpha = faded ? 0.1 : highlighted ? 0.8 : 0.45;
+          ctx.globalAlpha = faded ? 0.12 : highlighted ? 0.85 : 0.6;
         } else {
           ctx.setLineDash([]);
-          ctx.globalAlpha = faded ? 0.18 : 1;
+          ctx.globalAlpha = faded ? 0.22 : 1;
         }
         ctx.moveTo(link.source.x, link.source.y);
         ctx.lineTo(link.target.x, link.target.y);

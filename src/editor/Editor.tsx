@@ -23,6 +23,7 @@ import type { Tab, Settings } from "../types";
 import { glowstoneEditorTheme, markdownHighlighting } from "./theme";
 import { livePreview } from "./livePreview";
 import { insertAttachment, markdownKeymap, setActiveEditor } from "./commands";
+import { wikiLinkAutocomplete } from "./wikiLinks";
 import { useAppStore } from "../store";
 import { api } from "../lib/api";
 import {
@@ -120,6 +121,7 @@ export function Editor({
         EditorView.lineWrapping,
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         markdownHighlighting,
+        wikiLinkAutocomplete,
         glowstoneEditorTheme,
         bracketMatching(),
         indentOnInput(),

@@ -19,9 +19,6 @@ export function EmptyState() {
           <kbd>Ctrl + O</kbd>
         </button>
       </div>
-      <p className="empty-hint">
-        Type <code>[[</code> in a note to link it to another note.
-      </p>
     </div>
   );
 }

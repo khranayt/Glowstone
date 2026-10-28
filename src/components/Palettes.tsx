@@ -19,7 +19,8 @@ import {
   Layers,
 } from "lucide-react";
 import { useAppStore } from "../store";
-import { flattenNotes, fuzzyFilter, relPath } from "../lib/utils";
+import { useT } from "../lib/useT";
+import { flattenOpenable, fuzzyFilter, relPath } from "../lib/utils";
 import type { FlatNote } from "../lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ import type { FlatNote } from "../lib/utils";
 // ---------------------------------------------------------------------------
 
 export function QuickSwitcher() {
+  const t = useT();
   const open = useAppStore((s) => s.switcherOpen);
   const close = useAppStore((s) => s.closeSwitcher);
   const tree = useAppStore((s) => s.tree);
@@ -39,7 +41,7 @@ export function QuickSwitcher() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const notes = useMemo(() => flattenNotes(tree), [tree]);
+  const notes = useMemo(() => flattenOpenable(tree), [tree]);
 
   const recent = useMemo(() => {
     const byPath = new Map(notes.map((note) => [note.path, note]));
@@ -93,7 +95,7 @@ export function QuickSwitcher() {
           <input
             ref={inputRef}
             value={query}
-            placeholder="Go to file or create a note…"
+            placeholder={t("Go to file or create a note…")}
             spellCheck={false}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -117,7 +119,7 @@ export function QuickSwitcher() {
         <div className="palette-list" ref={listRef}>
           {!query.trim() && (
             <div className="palette-section-label">
-              {recent.length > 0 ? "Recently opened" : "Notes"}
+              {recent.length > 0 ? t("Recently opened") : t("Notes")}
             </div>
           )}
           {results.map((note, index) => {
@@ -152,24 +154,24 @@ export function QuickSwitcher() {
                 <Plus size={15} />
               </span>
               <span className="palette-item-text">
-                <span className="palette-item-title">Create note “{query.trim()}”</span>
+                <span className="palette-item-title">{t("Create note “{name}”", { name: query.trim() })}</span>
               </span>
             </button>
           )}
           {results.length === 0 && !showCreate && (
-            <div className="palette-empty">Start typing to search your vault.</div>
+            <div className="palette-empty">{t("Start typing to search your vault.")}</div>
           )}
         </div>
         <div className="palette-footer">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> to navigate
+            <kbd>↓</kbd> {t("to navigate")}
           </span>
           <span>
-            <kbd>↵</kbd> to open
+            <kbd>↵</kbd> {t("to open")}
           </span>
           <span>
-            <kbd>Esc</kbd> to close
+            <kbd>Esc</kbd> {t("to close")}
           </span>
         </div>
       </div>
@@ -190,6 +192,7 @@ interface Command {
 }
 
 export function CommandPalette() {
+  const t = useT();
   const open = useAppStore((s) => s.paletteOpen);
   const close = useAppStore((s) => s.closePalette);
   const store = useAppStore();
@@ -202,59 +205,59 @@ export function CommandPalette() {
     const list: Command[] = [
       {
         id: "new-note",
-        label: "Create new note",
+        label: t("Create new note"),
         shortcut: "Ctrl N",
         icon: <FilePlus2 size={15} />,
         run: () => void store.createNote(),
       },
       {
         id: "new-folder",
-        label: "Create new folder",
+        label: t("Create new folder"),
         icon: <FolderPlus size={15} />,
         run: () => void store.createFolder(),
       },
       {
         id: "open-switcher",
-        label: "Go to file",
+        label: t("Go to file"),
         shortcut: "Ctrl O",
         icon: <Search size={15} />,
         run: store.openSwitcher,
       },
       {
         id: "search",
-        label: "Search in vault",
+        label: t("Search in vault"),
         shortcut: "Ctrl Shift F",
         icon: <Search size={15} />,
         run: () => store.setSidebarView("search"),
       },
       {
         id: "graph",
-        label: "Open graph view",
+        label: t("Open graph view"),
         shortcut: "Ctrl Shift G",
         icon: <Waypoints size={15} />,
         run: store.openGraphTab,
       },
       {
         id: "import",
-        label: "Import notes…",
+        label: t("Import notes…"),
         icon: <Download size={15} />,
         run: store.openImport,
       },
       {
         id: "vaults",
-        label: "Manage vaults…",
+        label: t("Manage vaults…"),
         icon: <Layers size={15} />,
         run: store.openVaults,
       },
       {
         id: "toggle-sidebar",
-        label: "Toggle sidebar",
+        label: t("Toggle sidebar"),
         icon: <PanelLeft size={15} />,
         run: store.toggleSidebar,
       },
       {
         id: "reading",
-        label: activeTab?.mode === "read" ? "Switch to editing view" : "Switch to reading view",
+        label: activeTab?.mode === "read" ? t("Switch to editing view") : t("Switch to reading view"),
         shortcut: "Ctrl E",
         icon: <BookOpen size={15} />,
         run: () => {
@@ -265,14 +268,14 @@ export function CommandPalette() {
       },
       {
         id: "save",
-        label: "Save current note",
+        label: t("Save current note"),
         shortcut: "Ctrl S",
         icon: <Save size={15} />,
         run: () => void store.saveActiveTab(),
       },
       {
         id: "close-tab",
-        label: "Close current tab",
+        label: t("Close current tab"),
         shortcut: "Ctrl W",
         icon: <X size={15} />,
         run: () => {
@@ -281,20 +284,20 @@ export function CommandPalette() {
       },
       {
         id: "theme",
-        label: store.settings.theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
+        label: store.settings.theme === "dark" ? t("Switch to light theme") : t("Switch to dark theme"),
         icon: <SunMoon size={15} />,
         run: store.toggleTheme,
       },
       {
         id: "settings",
-        label: "Open settings",
+        label: t("Open settings"),
         shortcut: "Ctrl ,",
         icon: <Settings size={15} />,
         run: () => store.openSettings(),
       },
       {
         id: "refresh",
-        label: "Refresh vault and graph",
+        label: t("Refresh vault and graph"),
         icon: <RefreshCw size={15} />,
         run: () => {
           void store.refreshTree();
@@ -303,7 +306,7 @@ export function CommandPalette() {
       },
       {
         id: "switch-vault",
-        label: "Switch vault…",
+        label: t("Switch vault…"),
         icon: <Maximize2 size={15} />,
         run: () => void store.chooseVault(),
       },
@@ -343,7 +346,7 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             value={query}
-            placeholder="Type a command…"
+            placeholder={t("Type a command…")}
             spellCheck={false}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -381,18 +384,18 @@ export function CommandPalette() {
               {command.shortcut && <span className="palette-shortcut">{command.shortcut}</span>}
             </button>
           ))}
-          {results.length === 0 && <div className="palette-empty">No matching commands.</div>}
+          {results.length === 0 && <div className="palette-empty">{t("No matching commands.")}</div>}
         </div>
         <div className="palette-footer">
           <span>
             <kbd>↑</kbd>
-            <kbd>↓</kbd> to navigate
+            <kbd>↓</kbd> {t("to navigate")}
           </span>
           <span>
-            <kbd>↵</kbd> to run
+            <kbd>↵</kbd> {t("to run")}
           </span>
           <span>
-            <kbd>Esc</kbd> to close
+            <kbd>Esc</kbd> {t("to close")}
           </span>
         </div>
       </div>

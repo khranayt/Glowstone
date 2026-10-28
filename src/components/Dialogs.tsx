@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Check, Info, X, AlertCircle } from "lucide-react";
 import { useAppStore } from "../store";
 import { Modal } from "./Modal";
+import { useT } from "../lib/useT";
 
 export function ConfirmDialog() {
+  const t = useT();
   const confirm = useAppStore((s) => s.confirm);
   const setConfirm = useAppStore((s) => s.setConfirm);
 
@@ -20,7 +22,7 @@ export function ConfirmDialog() {
       <p className="dialog-message">{confirm.message}</p>
       <div className="dialog-actions">
         <button className="btn btn-secondary" onClick={() => setConfirm(null)}>
-          {confirm.cancelLabel ?? "Cancel"}
+          {confirm.cancelLabel ?? t("Cancel")}
         </button>
         <button
           className={`btn ${confirm.danger ? "btn-danger" : "btn-primary"}`}
@@ -30,7 +32,7 @@ export function ConfirmDialog() {
             void Promise.resolve(action()).catch(() => undefined);
           }}
         >
-          {confirm.confirmLabel ?? "Confirm"}
+          {confirm.confirmLabel ?? t("Confirm")}
         </button>
       </div>
     </Modal>
@@ -38,6 +40,7 @@ export function ConfirmDialog() {
 }
 
 function PromptInner({ prompt }: { prompt: NonNullable<ReturnType<typeof useAppStore.getState>["prompt"]> }) {
+  const t = useT();
   const setPrompt = useAppStore((s) => s.setPrompt);
   const [value, setValue] = useState(prompt.initial ?? "");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -85,10 +88,10 @@ function PromptInner({ prompt }: { prompt: NonNullable<ReturnType<typeof useAppS
       />
       <div className="dialog-actions">
         <button className="btn btn-secondary" onClick={() => setPrompt(null)}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button className="btn btn-primary" onClick={() => void submit()} disabled={!value.trim() || busy}>
-          {prompt.confirmLabel ?? "Create"}
+          {prompt.confirmLabel ?? t("Create")}
         </button>
       </div>
     </Modal>
@@ -168,6 +171,7 @@ export function ContextMenu() {
 }
 
 export function ToastStack() {
+  const t = useT();
   const toasts = useAppStore((s) => s.toasts);
   const dismiss = useAppStore((s) => s.dismissToast);
 
@@ -185,7 +189,7 @@ export function ToastStack() {
             )}
           </span>
           <span className="toast-message">{toast.message}</span>
-          <button className="toast-close" onClick={() => dismiss(toast.id)} aria-label="Dismiss">
+          <button className="toast-close" onClick={() => dismiss(toast.id)} aria-label={t("Dismiss")}>
             <X size={13} />
           </button>
         </div>

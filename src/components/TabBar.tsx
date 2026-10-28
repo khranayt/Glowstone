@@ -1,15 +1,14 @@
 import { useEffect, useRef, type MouseEvent } from "react";
-import { FileText, Plus, Waypoints, X } from "lucide-react";
+import { FileText, Frame, Plus, Table2, Waypoints, X } from "lucide-react";
 import { useAppStore } from "../store";
+import { useT } from "../lib/useT";
 import type { MenuItem, Tab } from "../types";
 
-const tabLabel = (tab: Tab) => {
-  if (tab.kind === "graph") return "Graph";
-  if (tab.kind === "empty") return "New tab";
-  return tab.title || "Untitled";
-};
+const isFileTab = (tab: Tab) =>
+  tab.kind === "note" || tab.kind === "base" || tab.kind === "canvas";
 
 export function TabBar() {
+  const t = useT();
   const tabs = useAppStore((s) => s.tabs);
   const activeTabId = useAppStore((s) => s.activeTabId);
   const activateTab = useAppStore((s) => s.activateTab);
@@ -17,6 +16,12 @@ export function TabBar() {
   const newTab = useAppStore((s) => s.newTab);
   const setContextMenu = useAppStore((s) => s.setContextMenu);
   const reveal = useRef(new Map<string, HTMLDivElement>());
+
+  const tabLabel = (tab: Tab) => {
+    if (tab.kind === "graph") return t("Graph");
+    if (tab.kind === "empty") return t("New tab");
+    return tab.title || t("Untitled");
+  };
 
   useEffect(() => {
     if (!activeTabId) return;
@@ -33,25 +38,25 @@ export function TabBar() {
     event.preventDefault();
     event.stopPropagation();
     const items: MenuItem[] = [
-      { label: "Close", action: () => void closeTab(tab.id) },
+      { label: t("Close tab"), action: () => void closeTab(tab.id) },
       {
-        label: "Close others",
+        label: t("Close others"),
         action: () => {
           void closeMany(tabs.filter((t) => t.id !== tab.id).map((t) => t.id));
         },
       },
       {
-        label: "Close all",
+        label: t("Close all"),
         action: () => {
           void closeMany(tabs.map((t) => t.id));
         },
       },
     ];
-    if (tab.kind === "note" && tab.path) {
+    if (isFileTab(tab) && tab.path) {
       items.push(
         { label: "", separator: true },
         {
-          label: "Copy note path",
+          label: t("Copy note path"),
           action: () => {
             void navigator.clipboard.writeText(tab.path!);
           },
@@ -65,7 +70,7 @@ export function TabBar() {
     <div className="tab-bar" data-tauri-drag-region>
       <div className="tab-strip">
         {tabs.map((tab) => {
-          const dirty = tab.kind === "note" && tab.content !== tab.savedContent;
+          const dirty = isFileTab(tab) && tab.content !== tab.savedContent;
           const active = tab.id === activeTabId;
           return (
             <div
@@ -90,6 +95,10 @@ export function TabBar() {
                   <Waypoints size={14} />
                 ) : tab.kind === "note" ? (
                   <FileText size={14} />
+                ) : tab.kind === "base" ? (
+                  <Table2 size={14} />
+                ) : tab.kind === "canvas" ? (
+                  <Frame size={14} />
                 ) : null}
               </span>
               <span className="tab-title">{tabLabel(tab)}</span>
@@ -100,16 +109,20 @@ export function TabBar() {
                   event.stopPropagation();
                   void closeTab(tab.id);
                 }}
-                aria-label={`Close ${tabLabel(tab)}`}
-                title="Close tab"
+                aria-label={`${t("Close tab")}: ${tabLabel(tab)}`}
+                title={t("Close tab")}
               >
                 <X size={14} />
               </button>
-
             </div>
           );
         })}
-        <button className="tab-new" onClick={newTab} title="New tab" aria-label="New tab">
+        <button
+          className="tab-new"
+          onClick={newTab}
+          title={t("New tab")}
+          aria-label={t("New tab")}
+        >
           <Plus size={16} />
         </button>
       </div>

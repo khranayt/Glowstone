@@ -8,6 +8,8 @@ import {
 import type { GraphData, GraphGroup, GraphNode } from "../types";
 import { useAppStore } from "../store";
 import { groupForNode } from "../lib/graphGroups";
+import { useT } from "../lib/useT";
+import { plural } from "../lib/i18n";
 
 export interface GraphCanvasHandle {
   fit: () => void;
@@ -120,6 +122,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
   },
   ref,
 ) {
+  const t = useT();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const theme = useAppStore((s) => s.settings.theme);
@@ -745,12 +748,12 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
           }}
         >
           <div className="graph-tooltip-title">
-            {tooltip.unresolved ? <span className="graph-tooltip-unresolved">Unresolved</span> : null}
+            {tooltip.unresolved ? <span className="graph-tooltip-unresolved">{t("Unresolved")}</span> : null}
             {tooltip.title}
           </div>
           {tooltip.folder && <div className="graph-tooltip-folder">{tooltip.folder}</div>}
           <div className="graph-tooltip-meta">
-            {tooltip.degree} {tooltip.degree === 1 ? "link" : "links"}
+            {tooltip.degree} {plural(tooltip.degree, { en: ["link", "links"], ru: ["связь", "связи", "связей"] })}
           </div>
         </div>
       )}

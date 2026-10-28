@@ -28,7 +28,6 @@ mime_guess = "2"
 html2md = "0.2"
 
 [profile.release]
-panic = "abort"
 codegen-units = 1
 lto = true
 opt-level = "s"

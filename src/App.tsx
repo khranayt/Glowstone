@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppStore } from "./store";
 import { isTauri } from "./lib/api";
 import { saveWorkspace } from "./lib/workspace";
+import { useT } from "./lib/useT";
 import { TitleBar } from "./components/TitleBar";
 import { ActivityBar } from "./components/ActivityBar";
 import { Sidebar } from "./components/Sidebar";
@@ -13,6 +14,8 @@ import { StatusBar } from "./components/StatusBar";
 import { EmptyState } from "./components/EmptyState";
 import { NoteView } from "./components/NoteView";
 import { GraphView } from "./components/GraphView";
+import { BaseView } from "./components/BaseView";
+import { CanvasView } from "./components/CanvasView";
 import { Welcome } from "./components/Welcome";
 import { SettingsModal } from "./components/SettingsModal";
 import { ImportModal } from "./components/ImportModal";
@@ -22,11 +25,12 @@ import { ConfirmDialog, PromptDialog, ContextMenu, ToastStack } from "./componen
 import logo from "./assets/logo.png";
 
 function EmptyTabView() {
+  const t = useT();
   return (
     <div className="note-view mode-empty">
       <header className="note-header empty-tab-header">
         <div className="note-header-left">
-          <span className="note-header-title">New tab</span>
+          <span className="note-header-title">{t("New tab")}</span>
         </div>
       </header>
       <EmptyState />
@@ -45,6 +49,7 @@ function Splash() {
 }
 
 export default function App() {
+  const t = useT();
   const ready = useAppStore((s) => s.ready);
   const vault = useAppStore((s) => s.vault);
   const initializing = useAppStore((s) => s.initializing);
@@ -58,6 +63,8 @@ export default function App() {
   const expanded = useAppStore((s) => s.expanded);
   const theme = useAppStore((s) => s.settings.theme);
   const fontSize = useAppStore((s) => s.settings.fontSize);
+  const showRibbon = useAppStore((s) => s.settings.showRibbon);
+  const showStatusBar = useAppStore((s) => s.settings.showStatusBar);
   const onboardingComplete = useAppStore((s) => s.settings.onboardingComplete);
   const [resizing, setResizing] = useState(false);
 
@@ -228,9 +235,16 @@ export default function App() {
       const active = state.tabs.find((tab) => tab.id === state.activeTabId);
       saveWorkspace(state.vault.path, {
         tabs: state.tabs
-          .filter((tab) => tab.kind === "note" && tab.path)
+          .filter(
+            (tab) =>
+              (tab.kind === "note" || tab.kind === "base" || tab.kind === "canvas") &&
+              tab.path,
+          )
           .map((tab) => ({ path: tab.path!, mode: tab.mode })),
-        activePath: active?.kind === "note" ? active.path ?? null : null,
+        activePath:
+          active && (active.kind === "note" || active.kind === "base" || active.kind === "canvas")
+            ? active.path ?? null
+            : null,
         sidebarView: state.sidebarView,
         sidebarOpen: state.sidebarOpen,
         rightPanelOpen: state.rightPanelOpen,
@@ -283,7 +297,7 @@ export default function App() {
         <div className={`app-shell ${resizing ? "resizing" : ""}`}>
           <TitleBar />
           <div className="app-body">
-            <ActivityBar />
+            {showRibbon && <ActivityBar />}
             {sidebarOpen && <Sidebar />}
             {sidebarOpen && (
               <div
@@ -299,18 +313,22 @@ export default function App() {
                 <EmptyTabView />
               ) : activeTab.kind === "graph" ? (
                 <GraphView />
+              ) : activeTab.kind === "base" ? (
+                <BaseView tab={activeTab} />
+              ) : activeTab.kind === "canvas" ? (
+                <CanvasView tab={activeTab} />
               ) : (
                 <NoteView tab={activeTab} />
               )}
             </main>
             {rightPanelOpen && <RightSidebar />}
           </div>
-          <StatusBar />
+          {showStatusBar && <StatusBar />}
 
           {initializing && (
             <div className="app-loading-overlay">
               <Loader2 size={22} className="spin" />
-              <span>Opening vault…</span>
+              <span>{t("Opening vault…")}</span>
             </div>
           )}
         </div>

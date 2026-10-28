@@ -2,8 +2,10 @@ import { useMemo } from "react";
 import { ArrowUpRight, Link2, ListTree, X } from "lucide-react";
 import { useAppStore } from "../store";
 import { backlinksFor, extractHeadings, noteIdFromPath } from "../lib/utils";
+import { useT } from "../lib/useT";
 
 export function RightSidebar() {
+  const t = useT();
   const tab = useAppStore((s) => s.tabs.find((t) => t.id === s.activeTabId) ?? null);
   const panel = useAppStore((s) => s.rightPanel);
   const setPanel = useAppStore((s) => s.setRightPanel);
@@ -36,22 +38,22 @@ export function RightSidebar() {
             onClick={() => setPanel("outline")}
           >
             <ListTree size={14} />
-            Outline
+            {t("Outline")}
           </button>
           <button
             className={`right-sidebar-tab ${panel === "backlinks" ? "active" : ""}`}
             onClick={() => setPanel("backlinks")}
           >
             <Link2 size={14} />
-            Backlinks
+            {t("Backlinks")}
             {backlinks.length > 0 && <span className="tab-count">{backlinks.length}</span>}
           </button>
         </div>
         <button
           className="icon-button"
           onClick={() => setOpen(false)}
-          title="Close panel"
-          aria-label="Close panel"
+          title={t("Close panel")}
+          aria-label={t("Close panel")}
         >
           <X size={15} />
         </button>
@@ -60,8 +62,8 @@ export function RightSidebar() {
       <div className="right-sidebar-body">
         {!noteTab && (
           <div className="sidebar-placeholder">
-            <p>No note is open.</p>
-            <p className="hint">Open a note to see its outline and backlinks.</p>
+            <p>{t("No note is open.")}</p>
+            <p className="hint">{t("Open a note to see its outline and backlinks.")}</p>
           </div>
         )}
 
@@ -69,8 +71,8 @@ export function RightSidebar() {
           <>
             {headings.length === 0 ? (
               <div className="sidebar-placeholder">
-                <p>No headings yet.</p>
-                <p className="hint">Use # headings to build an outline.</p>
+                <p>{t("No headings yet.")}</p>
+                <p className="hint">{t("Use # headings to build an outline.")}</p>
               </div>
             ) : (
               <div className="outline-list">
@@ -82,7 +84,7 @@ export function RightSidebar() {
                       if (!vault) return;
                       requestJump(noteTab.id, heading.line);
                     }}
-                    title={`Line ${heading.line}`}
+                    title={`${t("Line")} ${heading.line}`}
                   >
                     {heading.text}
                   </button>
@@ -95,13 +97,13 @@ export function RightSidebar() {
         {noteTab && panel === "backlinks" && (
           <>
             <div className="right-sidebar-section-title">
-              Linked mentions <span>{backlinks.length}</span>
+              {t("Linked mentions")} <span>{backlinks.length}</span>
             </div>
             {backlinks.length === 0 ? (
               <div className="sidebar-placeholder">
-                <p>No backlinks found.</p>
+                <p>{t("No backlinks found.")}</p>
                 <p className="hint">
-                  Link to this note with <code>[[{noteTab.title}]]</code> from another note.
+                  {t("Link to this note with")} <code>[[{noteTab.title}]]</code> {t("from another note.")}
                 </p>
               </div>
             ) : (

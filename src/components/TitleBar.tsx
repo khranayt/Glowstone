@@ -19,8 +19,11 @@ import { TabBar } from "./TabBar";
 import { Popover } from "./Popover";
 import { WindowControls } from "./WindowControls";
 import { basename } from "../lib/utils";
+import { useT } from "../lib/useT";
+import { plural } from "../lib/i18n";
 
 export function TitleBar() {
+  const t = useT();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
@@ -48,8 +51,8 @@ export function TitleBar() {
         <button
           className="titlebar-button"
           onClick={toggleSidebar}
-          title="Toggle sidebar"
-          aria-label="Toggle sidebar"
+          title={t("Toggle sidebar")}
+          aria-label={t("Toggle sidebar")}
         >
           <PanelLeft size={17} />
         </button>
@@ -60,8 +63,8 @@ export function TitleBar() {
             <button
               className={`titlebar-button ${open ? "active" : ""}`}
               onClick={toggle}
-              title={vault ? `Vault: ${vault.name}` : "Vault menu"}
-              aria-label="Vault menu"
+              title={vault ? t("Vault: {name}", { name: vault.name }) : t("Vault menu")}
+              aria-label={t("Vault menu")}
             >
               <Folder size={17} />
               <ChevronDown size={11} className="titlebar-caret" />
@@ -75,14 +78,15 @@ export function TitleBar() {
                   <Folder size={18} />
                 </div>
                 <div className="vault-menu-meta">
-                  <div className="vault-menu-name">{vault?.name ?? "No vault"}</div>
+                  <div className="vault-menu-name">{vault?.name ?? t("No vault")}</div>
                   <div className="vault-menu-path" title={vault?.path}>
                     {vault?.path}
                   </div>
                 </div>
               </div>
               <div className="vault-menu-stats">
-                {vault?.noteCount ?? 0} {(vault?.noteCount ?? 0) === 1 ? "note" : "notes"}
+                {vault?.noteCount ?? 0}{" "}
+                {plural(vault?.noteCount ?? 0, { en: ["note", "notes"], ru: ["заметка", "заметки", "заметок"] })}
               </div>
               <div className="menu-separator" />
               <button
@@ -93,7 +97,7 @@ export function TitleBar() {
                 }}
               >
                 <FilePlus2 size={15} />
-                <span>New note</span>
+                <span>{t("New note")}</span>
                 <span className="menu-shortcut">Ctrl N</span>
               </button>
               <button
@@ -104,7 +108,7 @@ export function TitleBar() {
                 }}
               >
                 <FolderPlus size={15} />
-                <span>New folder</span>
+                <span>{t("New folder")}</span>
               </button>
               <div className="menu-separator" />
               <button
@@ -115,7 +119,7 @@ export function TitleBar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Open another vault…</span>
+                <span>{t("Open another vault…")}</span>
               </button>
               <button
                 className="menu-item"
@@ -125,7 +129,7 @@ export function TitleBar() {
                 }}
               >
                 <Plus size={15} />
-                <span>Create new vault…</span>
+                <span>{t("Create new vault…")}</span>
               </button>
               <button
                 className="menu-item"
@@ -135,7 +139,7 @@ export function TitleBar() {
                 }}
               >
                 <Layers size={15} />
-                <span>Manage vaults…</span>
+                <span>{t("Manage vaults…")}</span>
               </button>
               <button
                 className="menu-item"
@@ -145,11 +149,11 @@ export function TitleBar() {
                 }}
               >
                 <Download size={15} />
-                <span>Import notes…</span>
+                <span>{t("Import notes…")}</span>
               </button>
               {settings.recentVaults.filter((path) => path !== vault?.path).length > 0 && (
                 <>
-                  <div className="menu-label">Recent vaults</div>
+                  <div className="menu-label">{t("Recent vaults")}</div>
                   {settings.recentVaults
                     .filter((path) => path !== vault?.path)
                     .slice(0, 5)
@@ -180,7 +184,7 @@ export function TitleBar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Refresh vault</span>
+                <span>{t("Refresh vault")}</span>
               </button>
               <button
                 className="menu-item"
@@ -190,7 +194,7 @@ export function TitleBar() {
                 }}
               >
                 <Settings size={15} />
-                <span>Settings</span>
+                <span>{t("Settings")}</span>
                 <span className="menu-shortcut">Ctrl ,</span>
               </button>
               <button
@@ -201,7 +205,7 @@ export function TitleBar() {
                 }}
               >
                 <XCircle size={15} />
-                <span>Close vault</span>
+                <span>{t("Close vault")}</span>
               </button>
             </div>
           )}
@@ -209,16 +213,16 @@ export function TitleBar() {
         <button
           className="titlebar-button"
           onClick={() => setSidebarView("search")}
-          title="Search (Ctrl+Shift+F)"
-          aria-label="Search"
+          title={`${t("Search")} (Ctrl+Shift+F)`}
+          aria-label={t("Search")}
         >
           <Search size={17} />
         </button>
         <button
           className="titlebar-button"
           onClick={() => void createNote()}
-          title="New note (Ctrl+N)"
-          aria-label="New note"
+          title={`${t("New note")} (Ctrl+N)`}
+          aria-label={t("New note")}
         >
           <SquarePen size={17} />
         </button>
@@ -234,8 +238,8 @@ export function TitleBar() {
             <button
               className={`titlebar-button titlebar-menu-button ${open ? "active" : ""}`}
               onClick={toggle}
-              title="Application menu"
-              aria-label="Application menu"
+              title={t("Application menu")}
+              aria-label={t("Application menu")}
             >
               <ChevronDown size={16} />
             </button>
@@ -251,7 +255,7 @@ export function TitleBar() {
                 }}
               >
                 <Settings size={15} />
-                <span>Settings</span>
+                <span>{t("Settings")}</span>
                 <span className="menu-shortcut">Ctrl ,</span>
               </button>
               <button
@@ -262,7 +266,7 @@ export function TitleBar() {
                 }}
               >
                 <SunMoon size={15} />
-                <span>Toggle theme</span>
+                <span>{t("Toggle theme")}</span>
               </button>
               <button
                 className="menu-item"
@@ -272,7 +276,7 @@ export function TitleBar() {
                 }}
               >
                 <Info size={15} />
-                <span>About Glowstone</span>
+                <span>{t("About Glowstone")}</span>
               </button>
               <div className="menu-separator" />
               <button
@@ -283,7 +287,7 @@ export function TitleBar() {
                 }}
               >
                 <Layers size={15} />
-                <span>Manage vaults…</span>
+                <span>{t("Manage vaults…")}</span>
               </button>
               <button
                 className="menu-item"
@@ -293,7 +297,7 @@ export function TitleBar() {
                 }}
               >
                 <Download size={15} />
-                <span>Import notes…</span>
+                <span>{t("Import notes…")}</span>
               </button>
               <div className="menu-separator" />
               <button
@@ -304,7 +308,7 @@ export function TitleBar() {
                 }}
               >
                 <XCircle size={15} />
-                <span>Close vault</span>
+                <span>{t("Close vault")}</span>
               </button>
             </>
           )}

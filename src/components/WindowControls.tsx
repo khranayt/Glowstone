@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "../lib/api";
+import { useT } from "../lib/useT";
 
 export function WindowControls() {
+  const t = useT();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -34,18 +36,18 @@ export function WindowControls() {
 
   return (
     <div className="window-controls">
-      <button className="window-control" onClick={minimize} title="Minimize" aria-label="Minimize">
+      <button className="window-control" onClick={minimize} title={t("Minimize")} aria-label={t("Minimize")}>
         <Minus size={15} />
       </button>
       <button
         className="window-control"
         onClick={toggleMaximize}
-        title={maximized ? "Restore" : "Maximize"}
-        aria-label="Maximize"
+        title={maximized ? t("Restore") : t("Maximize")}
+        aria-label={t("Maximize")}
       >
         <Square size={maximized ? 12 : 13} />
       </button>
-      <button className="window-control window-close" onClick={close} title="Close" aria-label="Close">
+      <button className="window-control window-close" onClick={close} title={t("Close window")} aria-label={t("Close window")}>
         <X size={16} />
       </button>
     </div>

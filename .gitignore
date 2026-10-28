@@ -10,3 +10,6 @@ app-icon.png
 
 # Vite dependency cache
 .vite
+
+# Built desktop packages
+release/

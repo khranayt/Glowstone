@@ -21,6 +21,8 @@ import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { Popover } from "./Popover";
 import { noteIdFromPath, uid } from "../lib/utils";
 import { api } from "../lib/api";
+import { useT } from "../lib/useT";
+import { plural } from "../lib/i18n";
 import {
   GROUP_COLORS,
   commonWords,
@@ -29,6 +31,7 @@ import {
 } from "../lib/graphGroups";
 
 export function GraphView() {
+  const t = useT();
   const graph = useAppStore((s) => s.graph);
   const loading = useAppStore((s) => s.graphLoading);
   const refreshGraph = useAppStore((s) => s.refreshGraph);
@@ -160,7 +163,7 @@ export function GraphView() {
       }
     }
     if (words.length === 0) {
-      toast("Those notes do not share any words", "info");
+      toast(t("Those notes do not share any words"), "info");
       return;
     }
     const name = groupNameFromWords(words);
@@ -169,7 +172,7 @@ export function GraphView() {
       GROUP_COLORS[groups.length % GROUP_COLORS.length];
     addGraphGroup({ id: uid(), name, color, terms: words });
     setSelectedIds([]);
-    toast(`Group “${name}” created`, "success");
+    toast(t("Group “{name}” created", { name }), "success");
   };
 
   return (
@@ -179,15 +182,15 @@ export function GraphView() {
           <span className="graph-header-icon">
             <Waypoints size={16} />
           </span>
-          <span className="note-header-title">Graph</span>
-          <div className="graph-scope" role="group" aria-label="Graph scope">
+          <span className="note-header-title">{t("Graph")}</span>
+          <div className="graph-scope" role="group" aria-label={t("Graph scope")}>
             <button
               className={scope === "global" ? "active" : ""}
               onClick={() => setScope("global")}
-              title="Show the whole vault"
+              title={t("Show the whole vault")}
               aria-pressed={scope === "global"}
             >
-              Global
+              {t("Global")}
             </button>
             <button
               className={scope === "local" ? "active" : ""}
@@ -195,22 +198,22 @@ export function GraphView() {
               disabled={!hasActive}
               title={
                 hasActive
-                  ? "Show only the open note and its neighbours"
-                  : "Open a note first to use the local graph"
+                  ? t("Show only the open note and its neighbours")
+                  : t("Open a note first to use the local graph")
               }
               aria-pressed={scope === "local"}
             >
-              Local
+              {t("Local")}
             </button>
           </div>
           {scope === "local" && hasActive && (
-            <div className="graph-depth" role="group" aria-label="Local graph depth">
+            <div className="graph-depth" role="group" aria-label={t("Local graph depth")}>
               {[1, 2, 3, 4].map((value) => (
                 <button
                   key={value}
                   className={depth === value ? "active" : ""}
                   onClick={() => setDepth(value)}
-                  title={`${value} ${value === 1 ? "hop" : "hops"} from the focused note`}
+                  title={`${value} ${plural(value, { en: ["hop", "hops"], ru: ["переход", "перехода", "переходов"] })} ${t("from the focused note")}`}
                   aria-pressed={depth === value}
                 >
                   {value}
@@ -219,40 +222,40 @@ export function GraphView() {
             </div>
           )}
           <span className="graph-header-stats">
-            {stats.notes} {stats.notes === 1 ? "note" : "notes"} · {stats.links}{" "}
-            {stats.links === 1 ? "link" : "links"}
+            {stats.notes} {plural(stats.notes, { en: ["note", "notes"], ru: ["заметка", "заметки", "заметок"] })} · {stats.links}{" "}
+            {plural(stats.links, { en: ["link", "links"], ru: ["связь", "связи", "связей"] })}
           </span>
         </div>
         <div className="note-header-actions">
           <button
             className="icon-button"
             onClick={() => canvasRef.current?.zoomOut()}
-            title="Zoom out"
-            aria-label="Zoom out"
+            title={t("Zoom out")}
+            aria-label={t("Zoom out")}
           >
             <ZoomOut size={16} />
           </button>
           <button
             className="icon-button"
             onClick={() => canvasRef.current?.zoomIn()}
-            title="Zoom in"
-            aria-label="Zoom in"
+            title={t("Zoom in")}
+            aria-label={t("Zoom in")}
           >
             <ZoomIn size={16} />
           </button>
           <button
             className="icon-button"
             onClick={() => canvasRef.current?.fit()}
-            title="Fit to view"
-            aria-label="Fit to view"
+            title={t("Fit to view")}
+            aria-label={t("Fit to view")}
           >
             <Maximize2 size={16} />
           </button>
           <button
             className="icon-button"
             onClick={() => void refreshGraph()}
-            title="Refresh graph"
-            aria-label="Refresh graph"
+            title={t("Refresh graph")}
+            aria-label={t("Refresh graph")}
           >
             <RefreshCw size={16} />
           </button>
@@ -263,8 +266,8 @@ export function GraphView() {
               <button
                 className={`icon-button graph-groups-button ${open ? "active" : ""}`}
                 onClick={toggle}
-                title="Graph groups"
-                aria-label="Graph groups"
+                title={t("Graph groups")}
+                aria-label={t("Graph groups")}
               >
                 <Palette size={16} />
                 {groups.length > 0 && <span className="graph-group-count">{groups.length}</span>}
@@ -273,7 +276,7 @@ export function GraphView() {
           >
             {() => (
               <div className="graph-groups">
-                <div className="graph-settings-title">Groups</div>
+                <div className="graph-settings-title">{t("Groups")}</div>
                 <button
                   className="menu-item"
                   disabled={selectedNodes.length < 2}
@@ -281,14 +284,13 @@ export function GraphView() {
                 >
                   <Plus size={14} />
                   <span>
-                    Group selected notes
+                    {t("Group selected notes")}
                     {selectedNodes.length > 0 ? ` (${selectedNodes.length})` : ""}
                   </span>
                 </button>
                 {groups.length === 0 ? (
                   <div className="graph-settings-hint">
-                    Shift-click notes on the graph to select several, then group them by the words
-                    they share.
+                    {t("Shift-click notes on the graph to select several, then group them by the words they share.")}
                   </div>
                 ) : (
                   <div className="graph-group-list">
@@ -296,7 +298,7 @@ export function GraphView() {
                       <div className="graph-group-row" key={group.id}>
                         <label
                           className="graph-group-color"
-                          title="Dot color"
+                          title={t("Dot color")}
                           style={{ background: group.color }}
                         >
                           <input
@@ -320,8 +322,8 @@ export function GraphView() {
                         </div>
                         <button
                           className="icon-button"
-                          title="Delete group"
-                          aria-label="Delete group"
+                          title={t("Delete group")}
+                          aria-label={t("Delete group")}
                           onClick={() => removeGraphGroup(group.id)}
                         >
                           <Trash2 size={14} />
@@ -331,7 +333,7 @@ export function GraphView() {
                   </div>
                 )}
                 <div className="graph-settings-hint">
-                  A group colors every note whose title, folder or path contains all of its words.
+                  {t("A group colors every note whose title, folder or path contains all of its words.")}
                 </div>
               </div>
             )}
@@ -343,8 +345,8 @@ export function GraphView() {
               <button
                 className={`icon-button ${open ? "active" : ""}`}
                 onClick={toggle}
-                title="Graph settings"
-                aria-label="Graph settings"
+                title={t("Graph settings")}
+                aria-label={t("Graph settings")}
               >
                 <Settings2 size={16} />
               </button>
@@ -352,9 +354,9 @@ export function GraphView() {
           >
             {() => (
               <div className="graph-settings">
-                <div className="graph-settings-title">Forces</div>
+                <div className="graph-settings-title">{t("Forces")}</div>
                 <label className="range-row">
-                  <span>Repulsion</span>
+                  <span>{t("Repulsion")}</span>
                   <input
                     type="range"
                     min={600}
@@ -365,7 +367,7 @@ export function GraphView() {
                   />
                 </label>
                 <label className="range-row">
-                  <span>Link distance</span>
+                  <span>{t("Link distance")}</span>
                   <input
                     type="range"
                     min={30}
@@ -376,7 +378,7 @@ export function GraphView() {
                   />
                 </label>
                 <label className="range-row">
-                  <span>Gravity</span>
+                  <span>{t("Gravity")}</span>
                   <input
                     type="range"
                     min={0}
@@ -389,9 +391,9 @@ export function GraphView() {
                 <div className="graph-settings-divider" />
                 <button className="menu-item" onClick={resetForces}>
                   <RotateCcw size={14} />
-                  <span>Reset forces</span>
+                  <span>{t("Reset forces")}</span>
                 </button>
-                <div className="graph-settings-hint">Drag to rearrange · scroll to zoom · double-click to open a note</div>
+                <div className="graph-settings-hint">{t("Drag to rearrange · scroll to zoom · double-click to open a note")}</div>
               </div>
             )}
           </Popover>
@@ -405,7 +407,7 @@ export function GraphView() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter notes…"
+              placeholder={t("Filter notes…")}
               spellCheck={false}
             />
           </div>
@@ -413,8 +415,8 @@ export function GraphView() {
             <button
               className={`icon-button ${labels ? "active" : ""}`}
               onClick={() => setLabels((value) => !value)}
-              title={labels ? "Hide labels" : "Show labels"}
-              aria-label={labels ? "Hide labels" : "Show labels"}
+              title={labels ? t("Hide labels") : t("Show labels")}
+              aria-label={labels ? t("Hide labels") : t("Show labels")}
               aria-pressed={labels}
             >
               <Tag size={15} />
@@ -422,8 +424,8 @@ export function GraphView() {
             <button
               className={`icon-button ${showOrphans ? "active" : ""}`}
               onClick={() => setShowOrphans((value) => !value)}
-              title={showOrphans ? "Hide orphan notes" : "Show orphan notes"}
-              aria-label={showOrphans ? "Hide orphan notes" : "Show orphan notes"}
+              title={showOrphans ? t("Hide orphan notes") : t("Show orphan notes")}
+              aria-label={showOrphans ? t("Hide orphan notes") : t("Show orphan notes")}
               aria-pressed={showOrphans}
             >
               <CircleDot size={15} />
@@ -431,8 +433,8 @@ export function GraphView() {
             <button
               className={`icon-button ${showUnresolved ? "active" : ""}`}
               onClick={() => setShowUnresolved((value) => !value)}
-              title={showUnresolved ? "Hide unresolved links" : "Show unresolved links"}
-              aria-label={showUnresolved ? "Hide unresolved links" : "Show unresolved links"}
+              title={showUnresolved ? t("Hide unresolved links") : t("Show unresolved links")}
+              aria-label={showUnresolved ? t("Hide unresolved links") : t("Show unresolved links")}
               aria-pressed={showUnresolved}
             >
               <Circle size={15} />
@@ -443,10 +445,10 @@ export function GraphView() {
         {data.nodes.length === 0 && !loading ? (
           <div className="graph-empty">
             <Waypoints size={38} />
-            <h2>No notes to graph yet</h2>
-            <p>Create a note and link it with <code>[[wikilinks]]</code> to see the graph grow.</p>
+            <h2>{t("No notes to graph yet")}</h2>
+            <p>{t("Create a note and link it with")} <code>[[wikilinks]]</code> {t("to see the graph grow.")}</p>
             <button className="btn btn-primary" onClick={() => void createNote()}>
-              Create a note
+              {t("Create a note")}
             </button>
           </div>
         ) : (
@@ -471,7 +473,7 @@ export function GraphView() {
         {selectedIds.length > 0 && (
           <div className="graph-selection-bar">
             <span className="graph-selection-count">
-              {selectedIds.length} selected
+              {selectedIds.length} {t("selected")}
             </span>
             <button
               className="btn btn-primary btn-small"
@@ -479,13 +481,13 @@ export function GraphView() {
               onClick={createGroupFromSelection}
             >
               <Plus size={13} />
-              Group notes
+              {t("Group notes")}
             </button>
             <button
               className="icon-button"
               onClick={() => setSelectedIds([])}
-              title="Clear selection"
-              aria-label="Clear selection"
+              title={t("Clear selection")}
+              aria-label={t("Clear selection")}
             >
               <X size={14} />
             </button>
@@ -494,11 +496,11 @@ export function GraphView() {
 
         <div className="graph-legend">
           <span className="legend-item">
-            <span className="legend-dot resolved" /> Note
+            <span className="legend-dot resolved" /> {t("Note")}
           </span>
           {showUnresolved && stats.unresolved > 0 && (
             <span className="legend-item">
-              <span className="legend-dot unresolved" /> Unresolved
+              <span className="legend-dot unresolved" /> {t("Unresolved")}
               <span className="legend-count">{stats.unresolved}</span>
             </span>
           )}
@@ -508,9 +510,9 @@ export function GraphView() {
             </span>
           ))}
         </div>
-        {loading && <div className="graph-loading">Building graph…</div>}
+        {loading && <div className="graph-loading">{t("Building graph…")}</div>}
         {filtered.length !== data.nodes.length && (
-          <div className="graph-filter-count">{filtered.length} shown</div>
+          <div className="graph-filter-count">{filtered.length} {t("shown")}</div>
         )}
       </div>
     </div>

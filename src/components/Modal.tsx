@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useT } from "../lib/useT";
 
 interface ModalProps {
   open: boolean;
@@ -20,6 +21,7 @@ export function Modal({
   className = "",
   hideHeader = false,
 }: ModalProps) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
@@ -52,7 +54,7 @@ export function Modal({
         {!hideHeader && (
           <div className="modal-header">
             <h2>{title}</h2>
-            <button className="icon-button" onClick={onClose} aria-label="Close">
+            <button className="icon-button" onClick={onClose} aria-label={t("Close")}>
               <X size={18} />
             </button>
           </div>

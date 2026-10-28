@@ -24,6 +24,7 @@ import { glowstoneEditorTheme, markdownHighlighting } from "./theme";
 import { livePreview } from "./livePreview";
 import { insertAttachment, markdownKeymap, setActiveEditor } from "./commands";
 import { wikiLinkAutocomplete } from "./wikiLinks";
+import { t } from "../lib/i18n";
 import { useAppStore } from "../store";
 import { api } from "../lib/api";
 import {
@@ -87,7 +88,7 @@ export function Editor({
     if (!state.vault) return;
     const active = state.tabs.find((item) => item.id === state.activeTabId);
     if (!active || active.kind !== "note" || !active.path) {
-      state.toast("Open a note before adding an image", "error");
+      state.toast(t("Open a note before adding an image"), "error");
       return;
     }
     const folder = attachmentFolderFor(state.vault.path, active.path, state.settings);
@@ -104,7 +105,7 @@ export function Editor({
         insertAttachment(attachmentMarkdown(state.vault.path, active.path, saved, name));
         state.expandToPath(saved);
       } catch (error) {
-        state.toast(`Could not add image: ${String(error)}`, "error");
+        state.toast(t("Could not add image: {error}", { error: String(error) }), "error");
       }
     }
     await state.refreshTree();
@@ -126,7 +127,7 @@ export function Editor({
         bracketMatching(),
         indentOnInput(),
         highlightSelectionMatches(),
-        placeholder("Start writing…"),
+        placeholder(t("Start writing…")),
         lineNumbersCompartment.current.of(
           current.lineNumbers ? [lineNumbers(), highlightActiveLineGutter()] : [],
         ),

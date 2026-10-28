@@ -16,6 +16,8 @@ import { Modal } from "./Modal";
 import { useAppStore } from "../store";
 import { basename, dirname } from "../lib/utils";
 import type { ImportKind, ImportResult } from "../types";
+import { useT } from "../lib/useT";
+import { plural, t as translate } from "../lib/i18n";
 
 interface FormatInfo {
   kind: ImportKind;
@@ -78,9 +80,10 @@ const formats: FormatInfo[] = [
 ];
 
 const formatLabel = (kind: ImportKind) =>
-  formats.find((format) => format.kind === kind)?.title ?? "Import";
+  translate(formats.find((format) => format.kind === kind)?.title ?? "Import");
 
 export function ImportModal() {
+  const t = useT();
   const open = useAppStore((s) => s.importOpen);
   const close = useAppStore((s) => s.closeImport);
   const importVault = useAppStore((s) => s.importVault);
@@ -122,13 +125,13 @@ export function ImportModal() {
           ? {
               multiple: false,
               directory: false,
-              title: `Choose ${formatLabel(kind)}`,
+              title: t("Choose {name}", { name: formatLabel(kind) }),
               filters: [{ name: "Evernote export", extensions: ["enex"] }],
             }
           : {
               multiple: false,
               directory: true,
-              title: `Choose ${formatLabel(kind)} folder`,
+              title: t("Choose {name} folder", { name: formatLabel(kind) }),
             },
       );
       if (typeof picked !== "string" || !picked) return;
@@ -140,7 +143,7 @@ export function ImportModal() {
         setName(basename(picked));
       }
     } catch (value) {
-      setError(`Could not open the picker: ${String(value)}`);
+      setError(t("Could not open the picker: {error}", { error: String(value) }));
     }
   };
 
@@ -150,25 +153,25 @@ export function ImportModal() {
       const picked = await openDialog({
         multiple: false,
         directory: true,
-        title: "Choose where to create the imported vault",
+        title: t("Choose where to create the imported vault"),
       });
       if (typeof picked === "string" && picked) setParent(picked);
     } catch (value) {
-      setError(`Could not open the picker: ${String(value)}`);
+      setError(t("Could not open the picker: {error}", { error: String(value) }));
     }
   };
 
   const runImport = async () => {
     if (!source) {
-      setError("Choose a source first.");
+      setError(t("Choose a source first."));
       return;
     }
     if (!parent) {
-      setError("Choose where the new vault should be created.");
+      setError(t("Choose where the new vault should be created."));
       return;
     }
     if (!name.trim()) {
-      setError("Give the imported vault a name.");
+      setError(t("Give the imported vault a name."));
       return;
     }
     setBusy(true);
@@ -194,14 +197,14 @@ export function ImportModal() {
   };
 
   const resultTitle = result
-    ? `Imported ${result.imported} ${result.imported === 1 ? "note" : "notes"}`
+    ? `${t("Imported {n} notes", { n: result.imported })}`
     : "";
 
   return (
     <Modal
       open={open}
       onClose={handleClose}
-      title={vault ? "Import notes" : "Import your notes"}
+      title={vault ? t("Import notes") : t("Import your notes")}
       width={820}
       className="import-modal"
     >
@@ -212,23 +215,23 @@ export function ImportModal() {
           </span>
           <h3>{resultTitle}</h3>
           <p>
-            Your notes are ready in <strong>{basename(result.path)}</strong>
-            {result.skipped > 0 ? ` · ${result.skipped} items skipped` : ""}.
+            {t("Your notes are ready in")} <strong>{basename(result.path)}</strong>
+            {result.skipped > 0 ? ` · ${t("{n} items skipped", { n: result.skipped })}` : ""}.
           </p>
           <div className="import-success-path">{result.path}</div>
           <div className="import-success-actions">
             <button className="btn btn-secondary" onClick={reset}>
-              Import something else
+              {t("Import something else")}
             </button>
             <button className="btn btn-primary" onClick={handleClose}>
-              Done
+              {t("Done")}
             </button>
           </div>
         </div>
       ) : (
         <div className="import-layout">
           <aside className="import-formats">
-            <div className="import-formats-label">Import from</div>
+            <div className="import-formats-label">{t("Import from")}</div>
             {formats.map((format) => (
               <button
                 key={format.kind}
@@ -237,8 +240,8 @@ export function ImportModal() {
               >
                 <span className="import-format-icon">{format.icon}</span>
                 <span className="import-format-copy">
-                  <span className="import-format-title">{format.title}</span>
-                  <span className="import-format-description">{format.description}</span>
+                  <span className="import-format-title">{t(format.title)}</span>
+                  <span className="import-format-description">{t(format.description)}</span>
                 </span>
               </button>
             ))}
@@ -247,37 +250,37 @@ export function ImportModal() {
           <section className="import-form">
             <div className="import-form-heading">
               <div>
-                <h3>{selected.title}</h3>
-                <p>{selected.description}</p>
+                <h3>{t(selected.title)}</h3>
+                <p>{t(selected.description)}</p>
               </div>
             </div>
 
             <div className="import-field">
-              <label>{selected.target === "file" ? "Export file" : "Source folder"}</label>
+              <label>{selected.target === "file" ? t("Export file") : t("Source folder")}</label>
               <div className="import-path-row">
-                <input value={source} readOnly placeholder="Nothing selected" spellCheck={false} />
+                <input value={source} readOnly placeholder={t("Nothing selected")} spellCheck={false} />
                 <button className="btn btn-secondary" onClick={() => void pickSource()}>
-                  Browse…
+                  {t("Browse…")}
                 </button>
               </div>
             </div>
 
             <div className="import-field">
-              <label>Create vault in</label>
+              <label>{t("Create vault in")}</label>
               <div className="import-path-row">
-                <input value={parent} readOnly placeholder="Choose a destination folder" spellCheck={false} />
+                <input value={parent} readOnly placeholder={t("Choose a destination folder")} spellCheck={false} />
                 <button className="btn btn-secondary" onClick={() => void pickParent()}>
-                  Browse…
+                  {t("Browse…")}
                 </button>
               </div>
             </div>
 
             <div className="import-field">
-              <label>Vault name</label>
+              <label>{t("Vault name")}</label>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="My imported vault"
+                placeholder={t("My imported vault")}
                 spellCheck={false}
               />
             </div>
@@ -287,14 +290,13 @@ export function ImportModal() {
             <div className="import-tip">
               <ShieldCheck size={15} />
               <span>
-                Your original files are never moved or changed. Glowstone creates a fresh copy in
-                the destination you choose.
+                {t("Your original files are never moved or changed. Glowstone creates a fresh copy in the destination you choose.")}
               </span>
             </div>
 
             <div className="import-actions">
               <button className="btn btn-secondary" onClick={handleClose} disabled={busy}>
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 className="btn btn-primary"
@@ -302,7 +304,7 @@ export function ImportModal() {
                 disabled={busy || !source || !parent || !name.trim()}
               >
                 {busy ? <Loader2 size={15} className="spin" /> : <ArrowRight size={15} />}
-                {busy ? "Importing…" : "Import vault"}
+                {busy ? t("Importing…") : t("Import vault")}
               </button>
             </div>
           </section>

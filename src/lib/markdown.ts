@@ -4,8 +4,9 @@ import hljs from "highlight.js/lib/common";
 import type { Tokens } from "marked";
 import { openUrl, openPath } from "@tauri-apps/plugin-opener";
 import { attachmentUrl, findAttachmentPath, splitReferenceSize } from "./attachments";
-import { flattenAllFiles, isExternalUrl, isMarkdownPath } from "./utils";
+import { flattenAllFiles, isBasePath, isCanvasPath, isExternalUrl, isMarkdownPath } from "./utils";
 import { isTauri } from "./api";
+import { t } from "./i18n";
 import { calloutSvg } from "./calloutIcons";
 import type { FileNode } from "../types";
 
@@ -215,6 +216,10 @@ export const decorateMarkdown = (
   const openAttachment = (target: string) => {
     const path = resolveAttachment(target);
     if (!path) return false;
+    if (isBasePath(path) || isCanvasPath(path)) {
+      onOpenNote(target);
+      return true;
+    }
     if (isTauri()) {
       void openPath(path).catch(() => {
         void attachmentUrl(vaultRoot, notePath, target, tree).then((url) => {
@@ -246,7 +251,7 @@ export const decorateMarkdown = (
     const copy = document.createElement("button");
     copy.className = "md-code-copy";
     copy.type = "button";
-    copy.innerHTML = `${copyIcon}<span>Copy</span>`;
+    copy.innerHTML = `${copyIcon}<span>${t("Copy")}</span>`;
     copy.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -254,10 +259,10 @@ export const decorateMarkdown = (
       navigator.clipboard.writeText(text).then(
         () => {
           copy.classList.add("copied");
-          copy.querySelector("span")!.textContent = "Copied";
+          copy.querySelector("span")!.textContent = t("Copied");
           window.setTimeout(() => {
             copy.classList.remove("copied");
-            copy.querySelector("span")!.textContent = "Copy";
+            copy.querySelector("span")!.textContent = t("Copy");
           }, 1400);
         },
         () => undefined,
@@ -363,7 +368,7 @@ export const decorateMarkdown = (
       image.classList.remove("md-image-loading");
       if (!url) {
         image.classList.add("md-image-error");
-        image.alt = image.alt || `Could not load ${reference}`;
+        image.alt = image.alt || t("Could not load {name}", { name: reference });
         return;
       }
       image.src = url;

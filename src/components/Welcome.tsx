@@ -3,8 +3,10 @@ import logo from "../assets/logo.png";
 import { useAppStore } from "../store";
 import { WindowControls } from "./WindowControls";
 import { basename } from "../lib/utils";
+import { useT } from "../lib/useT";
 
 export function Welcome() {
+  const t = useT();
   const settings = useAppStore((s) => s.settings);
   const chooseVault = useAppStore((s) => s.chooseVault);
   const createVault = useAppStore((s) => s.createVault);
@@ -26,31 +28,31 @@ export function Welcome() {
       <div className="welcome-content">
         <img className="welcome-logo" src={logo} alt="Glowstone logo" />
         <h1>Glowstone</h1>
-        <p className="welcome-tagline">Your notes, connected. Local-first Markdown knowledge base.</p>
+        <p className="welcome-tagline">{t("Your notes, connected.")} {t("Local-first Markdown knowledge base.")}</p>
 
         <div className="welcome-actions">
           <button className="welcome-button primary" onClick={() => void chooseVault()} disabled={initializing}>
             <FolderOpen size={18} />
-            Open folder as vault
+            {t("Open folder as vault")}
           </button>
           <button className="welcome-button" onClick={() => void createVault()} disabled={initializing}>
             <Plus size={18} />
-            Create new vault
+            {t("Create new vault")}
           </button>
           <button className="welcome-button" onClick={openImport} disabled={initializing}>
             <Download size={18} />
-            Import notes
+            {t("Import notes")}
           </button>
           <button className="welcome-button" onClick={openVaults} disabled={initializing}>
             <Layers size={18} />
-            Manage vaults
+            {t("Manage vaults")}
           </button>
         </div>
 
         {initializing && (
           <div className="welcome-loading">
             <Loader2 size={16} className="spin" />
-            Opening vault…
+            {t("Opening vault…")}
           </div>
         )}
 
@@ -58,7 +60,7 @@ export function Welcome() {
           <div className="welcome-recents">
             <div className="welcome-recents-title">
               <Clock size={13} />
-              Recent vaults
+              {t("Recent vaults")}
             </div>
             <div className="welcome-recent-list">
               {settings.recentVaults.slice(0, 6).map((path) => (
@@ -77,7 +79,7 @@ export function Welcome() {
         )}
 
         <p className="welcome-footer">
-          Open source · Your notes stay on your device · Markdown files you own
+          {t("Open source · Your notes stay on your device · Markdown files you own")}
         </p>
       </div>
     </div>

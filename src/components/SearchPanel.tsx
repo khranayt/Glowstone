@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CaseSensitive, Search, X } from "lucide-react";
 import { useAppStore } from "../store";
 import { relPath } from "../lib/utils";
+import { useT } from "../lib/useT";
+import { plural } from "../lib/i18n";
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -25,6 +27,7 @@ function Highlighted({ text, query, caseSensitive }: { text: string; query: stri
 }
 
 export function SearchPanel() {
+  const t = useT();
   const query = useAppStore((s) => s.searchQuery);
   const setQuery = useAppStore((s) => s.setSearchQuery);
   const results = useAppStore((s) => s.searchResults);
@@ -67,7 +70,7 @@ export function SearchPanel() {
           className="search-input"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search notes…"
+          placeholder={t("Search notes…")}
           spellCheck={false}
           onKeyDown={(event) => {
             if (event.key === "Enter" && results.length > 0) {
@@ -76,7 +79,7 @@ export function SearchPanel() {
           }}
         />
         {query && (
-          <button className="search-clear" onClick={clear} title="Clear search" aria-label="Clear search">
+          <button className="search-clear" onClick={clear} title={t("Clear search")} aria-label={t("Clear search")}>
             <X size={14} />
           </button>
         )}
@@ -85,18 +88,16 @@ export function SearchPanel() {
         <button
           className={`search-option ${caseSensitive ? "active" : ""}`}
           onClick={() => setCaseSensitive(!caseSensitive)}
-          title="Match case"
-          aria-label="Match case"
+          title={t("Match case")}
+          aria-label={t("Match case")}
         >
           <CaseSensitive size={16} />
         </button>
         <span className="search-summary">
           {query.trim()
             ? loading
-              ? "Searching…"
-              : `${totalMatches} ${totalMatches === 1 ? "match" : "matches"} in ${results.length} ${
-                  results.length === 1 ? "note" : "notes"
-                }`
+              ? t("Searching…")
+              : `${totalMatches} ${plural(totalMatches, { en: ["match", "matches"], ru: ["совпадение", "совпадения", "совпадений"] })} ${t("in")} ${results.length} ${plural(results.length, { en: ["note", "notes"], ru: ["заметке", "заметках", "заметках"] })}`
             : ""}
         </span>
       </div>
@@ -105,16 +106,16 @@ export function SearchPanel() {
         {!query.trim() && (
           <div className="sidebar-placeholder">
             <Search size={26} />
-            <p>Search across every note in your vault.</p>
-            <p className="hint">Press Ctrl+Shift+F from anywhere to open this panel.</p>
+            <p>{t("Search across every note in your vault.")}</p>
+            <p className="hint">{t("Press Ctrl+Shift+F from anywhere to open this panel.")}</p>
           </div>
         )}
 
         {query.trim() && !loading && results.length === 0 && (
           <div className="sidebar-placeholder">
             <Search size={26} />
-            <p>No results found.</p>
-            <p className="hint">Try a different word or turn off “Match case”.</p>
+            <p>{t("No results found.")}</p>
+            <p className="hint">{t("Try a different word or turn off “Match case”.")}</p>
           </div>
         )}
 
@@ -139,7 +140,7 @@ export function SearchPanel() {
                     key={`${file.path}-${match.line}`}
                     className="search-result"
                     onClick={() => void openNote(file.path, { line: match.line })}
-                    title={`Line ${match.line}`}
+                    title={`${t("Line")} ${match.line}`}
                   >
                     <span className="search-result-line">{match.line}</span>
                     <span className="search-result-text">

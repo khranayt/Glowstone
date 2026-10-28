@@ -1,0 +1,371 @@
+/* ------------------------------------------------ special file views -- */
+
+.special-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.special-header {
+  flex: 0 0 auto;
+}
+
+.special-meta {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ canvas -- */
+
+.canvas-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  background-color: var(--background-primary);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--text-faint) 28%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+.canvas-viewport:active {
+  cursor: grabbing;
+}
+
+.canvas-stage {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.canvas-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.canvas-edges text {
+  fill: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.canvas-card {
+  position: absolute;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border-strong);
+  border-radius: var(--radius-m);
+  background: var(--background-primary-alt);
+  box-shadow: var(--shadow-s);
+  cursor: grab;
+  user-select: none;
+}
+
+.canvas-card.selected {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+
+.canvas-card:active {
+  cursor: grabbing;
+}
+
+.canvas-text {
+  background: color-mix(in srgb, var(--interactive-accent) 7%, var(--background-primary-alt));
+}
+
+.canvas-file {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-primary-alt));
+}
+
+.canvas-link {
+  background: color-mix(in srgb, #61afef 12%, var(--background-primary-alt));
+}
+
+.canvas-group {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--background-secondary) 55%, transparent);
+  box-shadow: none;
+}
+
+.canvas-card-content {
+  height: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  color: var(--text-normal);
+  font-size: 12.5px;
+  line-height: 1.55;
+  user-select: text;
+}
+
+.canvas-card-content > :first-child {
+  margin-top: 0;
+}
+
+.canvas-card-content > :last-child {
+  margin-bottom: 0;
+}
+
+.canvas-card-content h1,
+.canvas-card-content h2,
+.canvas-card-content h3 {
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+
+.canvas-card-content h1 {
+  font-size: 17px;
+}
+
+.canvas-card-content h2 {
+  font-size: 15px;
+}
+
+.canvas-card-content p {
+  margin: 0 0 8px;
+}
+
+.canvas-text-editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  padding: 12px 14px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-normal);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.canvas-group-label {
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.canvas-group-body {
+  height: calc(100% - 28px);
+}
+
+.canvas-card-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--background-primary) 82%, transparent);
+  color: var(--text-faint);
+}
+
+.canvas-card-delete:hover {
+  background: var(--background-modifier-hover);
+  color: var(--danger);
+}
+
+.canvas-empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  color: var(--text-faint);
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------- bases -- */
+
+.base-view-select {
+  height: 23px;
+  max-width: 160px;
+  padding: 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+}
+
+.base-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px 32px;
+}
+
+.base-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-normal);
+  font-size: 12px;
+}
+
+.base-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--background-modifier-border-strong);
+  background: var(--background-primary);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.base-table td {
+  max-width: 340px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.base-table tbody tr:hover {
+  background: var(--background-modifier-hover);
+}
+
+.base-link {
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.base-link:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.base-source {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px;
+}
+
+.base-source textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  resize: none;
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  outline: none;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.base-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.base-empty {
+  padding: 28px 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------- bookmarks -- */
+
+.bookmarks-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px;
+}
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-s);
+}
+
+.bookmark-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bookmark-open {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  height: 29px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: left;
+}
+
+.bookmark-open span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-open:hover {
+  color: var(--text-normal);
+}
+
+.bookmark-remove {
+  width: 24px;
+  height: 24px;
+  margin-right: 3px;
+  opacity: 0;
+}
+
+.bookmark-row:hover .bookmark-remove {
+  opacity: 1;
+}
+
+.bookmarks-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 42px 24px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.bookmarks-empty p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.bookmarks-empty span {
+  max-width: 190px;
+  font-size: 11px;
+  line-height: 1.5;
+}

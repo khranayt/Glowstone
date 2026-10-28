@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { t } from "../lib/i18n";
 
 interface Props {
   children: ReactNode;
@@ -24,20 +25,20 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="crash-screen">
         <div className="crash-card">
-          <h1 className="crash-title">Glowstone hit a snag</h1>
+          <h1 className="crash-title">{t("Glowstone hit a snag")}</h1>
           <p className="crash-copy">
-            The last action could not be completed. Your notes on disk are untouched.
+            {t("The last action could not be completed. Your notes on disk are untouched.")}
           </p>
           <pre className="crash-detail">{this.state.error.message}</pre>
           <div className="crash-actions">
             <button className="btn btn-primary" onClick={() => window.location.reload()}>
-              Reload Glowstone
+              {t("Reload Glowstone")}
             </button>
             <button
               className="btn btn-secondary"
               onClick={() => this.setState({ error: null })}
             >
-              Try again
+              {t("Try again")}
             </button>
           </div>
         </div>

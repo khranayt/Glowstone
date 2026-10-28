@@ -32,6 +32,7 @@ import {
 } from "../lib/attachments";
 import { basename } from "../lib/utils";
 import { Popover } from "./Popover";
+import { useT } from "../lib/useT";
 
 const colors = ["#e3b341", "#e06c75", "#98c379", "#61afef", "#c678dd", "#56b6c2"];
 
@@ -50,12 +51,14 @@ function ToolButton({
   active?: boolean;
   optional?: boolean;
 }) {
+  const t = useT();
+  const text = t(label);
   return (
     <button
       className={`toolbar-button ${active ? "active" : ""} ${optional ? "toolbar-optional" : ""}`}
       onClick={onClick}
-      title={shortcut ? `${label} (${shortcut})` : label}
-      aria-label={label}
+      title={shortcut ? `${text} (${shortcut})` : text}
+      aria-label={text}
     >
       {children}
     </button>
@@ -63,12 +66,14 @@ function ToolButton({
 }
 
 const HeadingButton = ({ level }: { level: 1 | 2 | 3 }) => {
+  const t = useT();
+  const label = t("Heading {level}", { level });
   return (
     <button
       className="toolbar-button toolbar-heading"
       onClick={() => runEditorCommand(`heading${level}` as "heading1" | "heading2" | "heading3")}
-      title={`Heading ${level}`}
-      aria-label={`Heading ${level}`}
+      title={label}
+      aria-label={label}
     >
       H{level}
     </button>
@@ -76,6 +81,7 @@ const HeadingButton = ({ level }: { level: 1 | 2 | 3 }) => {
 };
 
 export function EditorToolbar() {
+  const t = useT();
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const barRef = useRef<HTMLDivElement | null>(null);
@@ -103,12 +109,12 @@ export function EditorToolbar() {
   const pickImage = async () => {
     const state = useAppStore.getState();
     if (!state.vault) {
-      state.toast("Open a vault before adding an image", "error");
+      state.toast(t("Open a vault before adding an image"), "error");
       return;
     }
     const active = state.tabs.find((item) => item.id === state.activeTabId);
     if (!active || active.kind !== "note" || !active.path) {
-      state.toast("Open a note before adding an image", "error");
+      state.toast(t("Open a note before adding an image"), "error");
       return;
     }
     if (!isTauri()) {
@@ -118,10 +124,10 @@ export function EditorToolbar() {
     try {
       const selected = await openDialog({
         multiple: true,
-        title: "Add images",
+        title: t("Add images"),
         filters: [
           {
-            name: "Images",
+            name: t("Images"),
             extensions: ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "svg"],
           },
         ],
@@ -138,12 +144,12 @@ export function EditorToolbar() {
           );
           state.expandToPath(saved);
         } catch (error) {
-          state.toast(`Could not add image: ${String(error)}`, "error");
+          state.toast(t("Could not add image: {error}", { error: String(error) }), "error");
         }
       }
       await state.refreshTree();
     } catch (error) {
-      state.toast(`Could not open the image picker: ${String(error)}`, "error");
+      state.toast(t("Could not open the image picker: {error}", { error: String(error) }), "error");
     }
   };
 
@@ -159,7 +165,7 @@ export function EditorToolbar() {
   };
 
   return (
-    <div className="editor-toolbar" role="toolbar" aria-label="Formatting" ref={barRef}>
+    <div className="editor-toolbar" role="toolbar" aria-label={t("Formatting")} ref={barRef}>
       <div className="toolbar-group">
         <ToolButton label="Undo" shortcut="Ctrl+Z" onClick={run("undo")}>
           <Undo2 size={16} />
@@ -209,8 +215,8 @@ export function EditorToolbar() {
         <button
           className="toolbar-button toolbar-wikilink"
           onClick={run("wikilink")}
-          title="Wikilink"
-          aria-label="Wikilink"
+          title={t("Wikilink")}
+          aria-label={t("Wikilink")}
         >
           [[ ]]
         </button>
@@ -224,8 +230,8 @@ export function EditorToolbar() {
             <button
               className={`toolbar-button ${open ? "active" : ""}`}
               onClick={toggle}
-              title="Insert table"
-              aria-label="Insert table"
+              title={t("Insert table")}
+              aria-label={t("Insert table")}
             >
               <TableIcon size={16} />
             </button>
@@ -252,15 +258,15 @@ export function EditorToolbar() {
                           setTableSize({ rows: 3, cols: 3 });
                           close();
                         }}
-                        title={`${rows} × ${cols} table`}
-                        aria-label={`Insert ${rows} by ${cols} table`}
+                        title={`${rows} × ${cols} ${t("table")}`}
+                        aria-label={`${t("Insert table")}: ${rows} × ${cols}`}
                       />
                     );
                   }),
                 )}
               </div>
               <div className="table-picker-label">
-                {tableSize.rows} × {tableSize.cols} table
+                {tableSize.rows} × {tableSize.cols} {t("table")}
               </div>
               <button
                 className="menu-item table-picker-format"
@@ -270,7 +276,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Format table at cursor</span>
+                <span>{t("Format table at cursor")}</span>
               </button>
             </div>
           )}
@@ -303,8 +309,8 @@ export function EditorToolbar() {
             <button
               className={`toolbar-button ${open ? "active" : ""}`}
               onClick={toggle}
-              title="Text color"
-              aria-label="Text color"
+              title={t("Text color")}
+              aria-label={t("Text color")}
             >
               <Baseline size={16} />
             </button>
@@ -343,8 +349,8 @@ export function EditorToolbar() {
             <button
               className={`toolbar-button ${open ? "active" : ""}`}
               onClick={toggle}
-              title="More formatting options"
-              aria-label="More formatting options"
+              title={t("More formatting options")}
+              aria-label={t("More formatting options")}
             >
               <MoreHorizontal size={16} />
             </button>
@@ -360,7 +366,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Underline</span>
+                <span>{t("Underline")}</span>
               </button>
               <button
                 className="menu-item"
@@ -370,7 +376,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Clear formatting</span>
+                <span>{t("Clear formatting")}</span>
               </button>
               <div className="menu-separator" />
               <button
@@ -381,7 +387,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Insert callout</span>
+                <span>{t("Insert callout")}</span>
               </button>
               <button
                 className="menu-item"
@@ -391,7 +397,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Horizontal rule</span>
+                <span>{t("Horizontal rule")}</span>
               </button>
               <button
                 className="menu-item"
@@ -401,7 +407,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Format table</span>
+                <span>{t("Format table")}</span>
               </button>
               <button
                 className="menu-item"
@@ -411,7 +417,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Math block</span>
+                <span>{t("Math block")}</span>
               </button>
               <button
                 className="menu-item"
@@ -421,7 +427,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>Footnote</span>
+                <span>{t("Footnote")}</span>
               </button>
               <div className="menu-separator" />
               <button
@@ -432,7 +438,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>{settings.lineNumbers ? "Hide" : "Show"} line numbers</span>
+                <span>{settings.lineNumbers ? t("Hide") : t("Show")} {t("line numbers")}</span>
               </button>
               <button
                 className="menu-item"
@@ -442,7 +448,7 @@ export function EditorToolbar() {
                 }}
               >
                 <span className="menu-icon-spacer" />
-                <span>{settings.spellcheck ? "Disable" : "Enable"} spellcheck</span>
+                <span>{settings.spellcheck ? t("Disable") : t("Enable")} {t("spellcheck")}</span>
               </button>
             </>
           )}

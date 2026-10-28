@@ -19,6 +19,7 @@ use walkdir::WalkDir;
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub theme: String,
+    pub language: String,
     pub font_size: u32,
     pub line_numbers: bool,
     pub readable_line_length: bool,
@@ -26,6 +27,10 @@ pub struct Settings {
     pub spellcheck: bool,
     pub confirm_delete: bool,
     pub onboarding_complete: bool,
+    pub show_ribbon: bool,
+    pub show_status_bar: bool,
+    pub daily_note_folder: String,
+    pub disabled_plugins: Vec<String>,
     pub default_file_to_open: String,
     pub default_file: String,
     pub always_focus_new_tabs: bool,
@@ -42,6 +47,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "dark".into(),
+            language: "en".into(),
             font_size: 16,
             line_numbers: false,
             readable_line_length: true,
@@ -49,6 +55,10 @@ impl Default for Settings {
             spellcheck: false,
             confirm_delete: true,
             onboarding_complete: false,
+            show_ribbon: true,
+            show_status_bar: true,
+            daily_note_folder: String::new(),
+            disabled_plugins: Vec::new(),
             default_file_to_open: "last".into(),
             default_file: String::new(),
             always_focus_new_tabs: true,
@@ -221,6 +231,8 @@ struct FileNode {
     path: String,
     is_dir: bool,
     ext: String,
+    modified: Option<u64>,
+    created: Option<u64>,
     children: Vec<FileNode>,
 }
 
@@ -230,6 +242,13 @@ struct VaultInfo {
     name: String,
     path: String,
     note_count: usize,
+}
+
+fn system_time_secs(value: std::io::Result<std::time::SystemTime>) -> Option<u64> {
+    value
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs())
 }
 
 fn read_dir_tree(dir: &Path) -> Vec<FileNode> {
@@ -244,6 +263,8 @@ fn read_dir_tree(dir: &Path) -> Vec<FileNode> {
             continue;
         }
         let Ok(meta) = entry.metadata() else { continue };
+        let modified = system_time_secs(meta.modified());
+        let created = system_time_secs(meta.created());
         if meta.is_dir() {
             if meta.file_type().is_symlink() {
                 continue;
@@ -254,6 +275,8 @@ fn read_dir_tree(dir: &Path) -> Vec<FileNode> {
                 path: norm(&path),
                 is_dir: true,
                 ext: String::new(),
+                modified,
+                created,
                 children,
             });
         } else if meta.is_file() {
@@ -267,6 +290,8 @@ fn read_dir_tree(dir: &Path) -> Vec<FileNode> {
                 path: norm(&path),
                 is_dir: false,
                 ext,
+                modified,
+                created,
                 children: Vec::new(),
             });
         }

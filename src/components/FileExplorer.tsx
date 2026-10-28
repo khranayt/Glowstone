@@ -8,12 +8,22 @@ import {
   Image as ImageIcon,
   SquarePen,
   FolderPlus,
+  Star,
+  Frame,
+  Table2,
 } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useAppStore } from "../store";
 import type { FileNode, MenuItem } from "../types";
-import { isImagePath, isMarkdownPath } from "../lib/utils";
+import {
+  isBasePath,
+  isCanvasPath,
+  isImagePath,
+  isMarkdownPath,
+  isSpecialFilePath,
+} from "../lib/utils";
 import { isTauri } from "../lib/api";
+import { useT } from "../lib/useT";
 
 function RenameInput({
   initial,
@@ -68,11 +78,25 @@ function RenameInput({
 const iconFor = (node: FileNode) => {
   if (node.isDir) return <Folder size={15} />;
   if (isMarkdownPath(node.path)) return <FileText size={15} />;
+  if (isBasePath(node.path)) return <Table2 size={15} />;
+  if (isCanvasPath(node.path)) return <Frame size={15} />;
   if (isImagePath(node.path)) return <ImageIcon size={15} />;
   return <File size={15} />;
 };
 
+const canOpenInApp = (path: string) => isMarkdownPath(path) || isSpecialFilePath(path);
+
+const sortNodes = (nodes: FileNode[], sort: "name" | "modified") =>
+  [...nodes].sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    if (sort === "modified") {
+      return (b.modified ?? 0) - (a.modified ?? 0) || a.name.localeCompare(b.name);
+    }
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  });
+
 export function FileExplorer() {
+  const t = useT();
   const tree = useAppStore((s) => s.tree);
   const vault = useAppStore((s) => s.vault);
   const expanded = useAppStore((s) => s.expanded);
@@ -80,7 +104,9 @@ export function FileExplorer() {
   const renamingPath = useAppStore((s) => s.renamingPath);
   const activePath = useAppStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
-    return tab?.kind === "note" ? tab.path ?? null : null;
+    return tab && (tab.kind === "note" || tab.kind === "base" || tab.kind === "canvas")
+      ? tab.path ?? null
+      : null;
   });
   const toggleFolder = useAppStore((s) => s.toggleFolder);
   const selectPath = useAppStore((s) => s.selectPath);
@@ -93,6 +119,11 @@ export function FileExplorer() {
   const setContextMenu = useAppStore((s) => s.setContextMenu);
   const movePath = useAppStore((s) => s.movePath);
   const refreshTree = useAppStore((s) => s.refreshTree);
+  const bookmarks = useAppStore((s) => s.bookmarks);
+  const fileSort = useAppStore((s) => s.fileSort);
+  const toggleBookmark = useAppStore((s) => s.toggleBookmark);
+  const createBase = useAppStore((s) => s.createBase);
+  const createCanvas = useAppStore((s) => s.createCanvas);
   const toast = useAppStore((s) => s.toast);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -115,36 +146,44 @@ export function FileExplorer() {
 
   const copy = (path: string) => {
     void navigator.clipboard.writeText(path);
-    toast("Path copied", "info");
+    toast(t("Path copied"), "info");
   };
 
   const fileMenu = (node: FileNode): MenuItem[] => {
+    const bookmarked = bookmarks.some((item) => item.path === node.path);
+    const bookmarkItem: MenuItem = {
+      label: bookmarked ? t("Remove bookmark") : t("Add bookmark"),
+      action: () =>
+        toggleBookmark({ path: node.path, title: node.name, isDir: node.isDir }),
+    };
     const items: MenuItem[] = [];
     if (node.isDir) {
       items.push(
-        { label: "New note", action: () => void createNote(node.path) },
-        { label: "New folder", action: () => void createFolder(node.path) },
+        { label: t("New note"), action: () => void createNote(node.path) },
+        { label: t("New folder"), action: () => void createFolder(node.path) },
         { label: "", separator: true },
-        { label: "Rename", action: () => startRename(node.path), shortcut: "F2" },
-        { label: "Delete", action: () => deletePath(node.path), danger: true },
+        bookmarkItem,
+        { label: t("Rename"), action: () => startRename(node.path), shortcut: "F2" },
+        { label: t("Delete"), action: () => deletePath(node.path), danger: true },
         { label: "", separator: true },
-        { label: "Copy path", action: () => copy(node.path) },
-        { label: "Reveal in file manager", action: () => reveal(node.path) },
+        { label: t("Copy path"), action: () => copy(node.path) },
+        { label: t("Reveal in file manager"), action: () => reveal(node.path) },
       );
     } else {
       items.push(
-        { label: "Open", action: () => void openNote(node.path) },
+        { label: t("Open"), action: () => void openNote(node.path) },
         {
-          label: "Open in new tab",
+          label: t("Open in new tab"),
           action: () => void openNote(node.path, { newTab: true }),
           shortcut: "Ctrl Enter",
         },
         { label: "", separator: true },
-        { label: "Rename", action: () => startRename(node.path), shortcut: "F2" },
-        { label: "Delete", action: () => deletePath(node.path), danger: true },
+        bookmarkItem,
+        { label: t("Rename"), action: () => startRename(node.path), shortcut: "F2" },
+        { label: t("Delete"), action: () => deletePath(node.path), danger: true },
         { label: "", separator: true },
-        { label: "Copy path", action: () => copy(node.path) },
-        { label: "Reveal in file manager", action: () => reveal(node.path) },
+        { label: t("Copy path"), action: () => copy(node.path) },
+        { label: t("Reveal in file manager"), action: () => reveal(node.path) },
       );
     }
     return items;
@@ -156,12 +195,14 @@ export function FileExplorer() {
       x: event.clientX,
       y: event.clientY,
       items: [
-        { label: "New note", action: () => void createNote(vault?.path) },
-        { label: "New folder", action: () => void createFolder(vault?.path) },
+        { label: t("New note"), action: () => void createNote(vault?.path) },
+        { label: t("New folder"), action: () => void createFolder(vault?.path) },
+        { label: t("New database"), action: () => void createBase() },
+        { label: t("New canvas"), action: () => void createCanvas() },
         { label: "", separator: true },
-        { label: "Refresh", action: () => void refreshTree() },
-        { label: "Copy vault path", action: () => vault && copy(vault.path) },
-        ...(vault ? [{ label: "Reveal in file manager", action: () => reveal(vault.path) }] : []),
+        { label: t("Refresh"), action: () => void refreshTree() },
+        { label: t("Copy vault path"), action: () => vault && copy(vault.path) },
+        ...(vault ? [{ label: t("Reveal in file manager"), action: () => reveal(vault.path) }] : []),
       ],
     });
   };
@@ -214,14 +255,14 @@ export function FileExplorer() {
             selectPath(node.path);
             if (node.isDir) {
               toggleFolder(node.path);
-            } else if (isMarkdownPath(node.path)) {
+            } else if (canOpenInApp(node.path)) {
               void openNote(node.path, { newTab: event.ctrlKey || event.metaKey });
             } else if (isTauri()) {
               void openPath(node.path).catch((error) => toast(String(error), "error"));
             }
           }}
           onAuxClick={(event) => {
-            if (event.button === 1 && !node.isDir && isMarkdownPath(node.path)) {
+            if (event.button === 1 && !node.isDir && canOpenInApp(node.path)) {
               event.preventDefault();
               void openNote(node.path, { newTab: true });
             }
@@ -256,10 +297,10 @@ export function FileExplorer() {
           <div className="tree-children">
             {node.children.length === 0 && (
               <div className="tree-empty-folder" style={{ paddingLeft: 28 + depth * 14 }}>
-                Empty folder
+                {t("Empty folder")}
               </div>
             )}
-            {node.children.map((child) => renderNode(child, depth + 1))}
+            {sortNodes(node.children, fileSort).map((child) => renderNode(child, depth + 1))}
           </div>
         )}
       </div>
@@ -297,18 +338,18 @@ export function FileExplorer() {
         className={`tree-root ${dropTarget === "__root__" ? "tree-root-drop" : ""}`}
         onContextMenu={rootMenu}
       >
-        {tree.map((node) => renderNode(node, 0))}
+        {sortNodes(tree, fileSort).map((node) => renderNode(node, 0))}
         {tree.length === 0 && (
           <div className="tree-empty">
             <FileText size={28} />
-            <p>No notes yet</p>
+            <p>{t("No notes yet")}</p>
             <button className="btn btn-secondary" onClick={() => void createNote(vault?.path)}>
               <SquarePen size={15} />
-              Create a note
+              {t("Create a note")}
             </button>
             <button className="btn btn-ghost" onClick={() => void createFolder(vault?.path)}>
               <FolderPlus size={15} />
-              New folder
+              {t("New folder")}
             </button>
           </div>
         )}

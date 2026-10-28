@@ -25,8 +25,10 @@ import { ReadingView } from "./ReadingView";
 import { EditorToolbar } from "./Toolbar";
 import { Popover } from "./Popover";
 import { isTauri } from "../lib/api";
+import { useT } from "../lib/useT";
 
 function InlineTitle({ tab }: { tab: Tab }) {
+  const t = useT();
   const commitInlineTitle = useAppStore((s) => s.commitInlineTitle);
   const [draft, setDraft] = useState(tab.title);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -73,13 +75,14 @@ function InlineTitle({ tab }: { tab: Tab }) {
           event.currentTarget.blur();
         }
       }}
-      aria-label="Note title"
-      placeholder="Untitled"
+      aria-label={t("Note title")}
+      placeholder={t("Untitled")}
     />
   );
 }
 
 export function NoteView({ tab }: { tab: Tab }) {
+  const t = useT();
   const vault = useAppStore((s) => s.vault);
   const tree = useAppStore((s) => s.tree);
   const settings = useAppStore((s) => s.settings);
@@ -111,21 +114,21 @@ export function NoteView({ tab }: { tab: Tab }) {
       y: rect.bottom + 4,
       items: [
         {
-          label: "Rename note",
+          label: t("Rename note"),
           action: () =>
             setPrompt({
-              title: "Rename note",
-              label: "Note name",
+              title: t("Rename note"),
+              label: t("Note name"),
               initial: tab.title,
-              confirmLabel: "Rename",
+              confirmLabel: t("Rename"),
               onSubmit: (value) => useAppStore.getState().commitInlineTitle(value),
             }),
         },
-        { label: "Delete note", action: () => deletePath(tab.path!), danger: true },
+        { label: t("Delete note"), action: () => deletePath(tab.path!), danger: true },
         { label: "", separator: true },
-        { label: "Copy vault path", action: () => void navigator.clipboard.writeText(tab.path!) },
+        { label: t("Copy note path"), action: () => void navigator.clipboard.writeText(tab.path!) },
         {
-          label: "Reveal in file manager",
+          label: t("Reveal note in file manager"),
           action: () => {
             if (!isTauri()) return;
             void revealItemInDir(tab.path!).catch((error) => toast(String(error), "error"));
@@ -133,11 +136,11 @@ export function NoteView({ tab }: { tab: Tab }) {
         },
         { label: "", separator: true },
         {
-          label: settings.lineNumbers ? "Hide line numbers" : "Show line numbers",
+          label: settings.lineNumbers ? t("Hide line numbers") : t("Show line numbers"),
           action: () => updateSettings({ lineNumbers: !settings.lineNumbers }),
         },
         {
-          label: settings.spellcheck ? "Disable spellcheck" : "Enable spellcheck",
+          label: settings.spellcheck ? t("Disable spellcheck") : t("Enable spellcheck"),
           action: () => updateSettings({ spellcheck: !settings.spellcheck }),
         },
       ],
@@ -152,8 +155,8 @@ export function NoteView({ tab }: { tab: Tab }) {
             className="icon-button"
             onClick={() => void navigateHistory(-1)}
             disabled={!canBack}
-            title="Back"
-            aria-label="Back"
+            title={t("Back")}
+            aria-label={t("Back")}
           >
             <ArrowLeft size={16} />
           </button>
@@ -161,8 +164,8 @@ export function NoteView({ tab }: { tab: Tab }) {
             className="icon-button"
             onClick={() => void navigateHistory(1)}
             disabled={!canForward}
-            title="Forward"
-            aria-label="Forward"
+            title={t("Forward")}
+            aria-label={t("Forward")}
           >
             <ArrowRight size={16} />
           </button>
@@ -175,28 +178,28 @@ export function NoteView({ tab }: { tab: Tab }) {
           <button
             className={`icon-button ${rightPanelOpen && rightPanel === "outline" ? "active" : ""}`}
             onClick={() => toggleRightPanel("outline")}
-            title="Outline"
-            aria-label="Outline"
+            title={t("Outline")}
+            aria-label={t("Outline")}
           >
             <ListTree size={16} />
           </button>
           <button
             className={`icon-button ${rightPanelOpen && rightPanel === "backlinks" ? "active" : ""}`}
             onClick={() => toggleRightPanel("backlinks")}
-            title="Backlinks"
-            aria-label="Backlinks"
+            title={t("Backlinks")}
+            aria-label={t("Backlinks")}
           >
             <Link2 size={16} />
           </button>
           <button
             className={`icon-button ${readonly ? "active" : ""}`}
             onClick={() => void setMode(tab.id, readonly ? "edit" : "read")}
-            title={readonly ? "Edit note (Ctrl+E)" : "Reading view (Ctrl+E)"}
-            aria-label={readonly ? "Edit note" : "Reading view"}
+            title={readonly ? `${t("Edit note")} (Ctrl+E)` : `${t("Reading view")} (Ctrl+E)`}
+            aria-label={readonly ? t("Edit note") : t("Reading view")}
           >
             {readonly ? <Pencil size={16} /> : <BookOpen size={16} />}
           </button>
-          <button className="icon-button" onClick={openMore} title="More options" aria-label="More options">
+          <button className="icon-button" onClick={openMore} title={t("More options")} aria-label={t("More options")}>
             <MoreHorizontal size={16} />
           </button>
         </div>

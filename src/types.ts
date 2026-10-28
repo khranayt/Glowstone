@@ -1,5 +1,7 @@
 export type Theme = "dark" | "light";
-export type SidebarView = "files" | "search";
+export type Language = "en" | "ru";
+export type SidebarView = "files" | "search" | "bookmarks";
+export type FileSort = "name" | "modified";
 export type GraphScope = "global" | "local";
 export type RightPanel = "outline" | "backlinks";
 export type NoteMode = "edit" | "read";
@@ -9,6 +11,7 @@ export type AttachmentLocation = "root" | "current" | "subfolder" | "folder";
 
 export interface Settings {
   theme: Theme;
+  language: Language;
   fontSize: number;
   lineNumbers: boolean;
   readableLineLength: boolean;
@@ -16,6 +19,10 @@ export interface Settings {
   spellcheck: boolean;
   confirmDelete: boolean;
   onboardingComplete: boolean;
+  showRibbon: boolean;
+  showStatusBar: boolean;
+  dailyNoteFolder: string;
+  disabledPlugins: string[];
   defaultFileToOpen: DefaultFileMode;
   defaultFile: string;
   alwaysFocusNewTabs: boolean;
@@ -33,6 +40,8 @@ export interface FileNode {
   path: string;
   isDir: boolean;
   ext: string;
+  modified?: number;
+  created?: number;
   children: FileNode[];
 }
 
@@ -68,6 +77,12 @@ export interface GraphGroup {
   terms: string[];
 }
 
+export interface Bookmark {
+  path: string;
+  title: string;
+  isDir: boolean;
+}
+
 export type ImportKind =
   | "obsidian"
   | "logseq"
@@ -94,7 +109,7 @@ export interface SearchFile {
   matches: SearchHit[];
 }
 
-export type TabKind = "note" | "graph" | "empty";
+export type TabKind = "note" | "graph" | "empty" | "base" | "canvas";
 
 export interface Tab {
   id: string;

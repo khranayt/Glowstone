@@ -20,6 +20,18 @@ export const titleFromPath = (path: string) => stripExt(basename(path));
 export const isMarkdownPath = (path: string) =>
   /\.(md|markdown)$/i.test(path);
 
+export const isBasePath = (path: string) => /\.base$/i.test(path);
+
+export const isCanvasPath = (path: string) => /\.canvas$/i.test(path);
+
+export const isSpecialFilePath = (path: string) =>
+  isBasePath(path) || isCanvasPath(path);
+
+export const fileTitleFromPath = (path: string) => {
+  const name = basename(path);
+  return name.includes(".") ? name.slice(0, name.lastIndexOf(".")) : name;
+};
+
 export const isImagePath = (path: string) =>
   /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(path);
 
@@ -101,6 +113,27 @@ export const flattenAllFiles = (tree: FileNode[]): FileNode[] => {
     }
   };
   walk(tree);
+  return out;
+};
+
+/** Notes, canvases and bases that can be opened in a tab. */
+export const flattenOpenable = (tree: FileNode[]): FlatNote[] => {
+  const out: FlatNote[] = [];
+  const walk = (nodes: FileNode[], folderParts: string[]) => {
+    for (const node of nodes) {
+      if (node.isDir) {
+        walk(node.children, [...folderParts, node.name]);
+      } else if (isMarkdownPath(node.path) || isBasePath(node.path) || isCanvasPath(node.path)) {
+        out.push({
+          path: node.path,
+          title: fileTitleFromPath(node.path),
+          folder: folderParts.join("/"),
+          name: node.name,
+        });
+      }
+    }
+  };
+  walk(tree, []);
   return out;
 };
 

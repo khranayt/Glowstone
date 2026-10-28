@@ -6,10 +6,13 @@ import {
   activeTabOf,
   basename,
   dirname,
+  fileTitleFromPath,
   findNoteByLink,
   flattenAllFiles,
   flattenNotes,
   fuzzyFilter,
+  isBasePath,
+  isCanvasPath,
   joinPath,
   linkSignature,
   noteIdFromPath,
@@ -18,8 +21,12 @@ import {
 } from "./lib/utils";
 import { loadWorkspace, saveWorkspace } from "./lib/workspace";
 import { loadGraphGroups, saveGraphGroups } from "./lib/graphGroups";
+import { loadBookmarks, saveBookmarks } from "./lib/bookmarks";
+import { DEFAULT_BASE, DEFAULT_CANVAS } from "./lib/specialFiles";
 import { findAttachmentPath, looksLikeAttachment } from "./lib/attachments";
+import { plural, setLanguage, t } from "./lib/i18n";
 import type {
+  Bookmark,
   ConfirmOptions,
   ContextMenuState,
   FileNode,
@@ -35,6 +42,7 @@ import type {
   RightPanel,
   SearchFile,
   Settings,
+  FileSort,
   SidebarView,
   Tab,
   Theme,
@@ -42,10 +50,21 @@ import type {
   VaultInfo,
 } from "./types";
 
-export type SettingsSection = "appearance" | "editor" | "files" | "about";
+export type SettingsSection =
+  | "general"
+  | "appearance"
+  | "interface"
+  | "editor"
+  | "files"
+  | "hotkeys"
+  | "keychain"
+  | "core-plugins"
+  | "community-plugins"
+  | "about";
 
 export const defaultSettings: Settings = {
   theme: "dark",
+  language: "en",
   fontSize: 16,
   lineNumbers: false,
   readableLineLength: true,
@@ -53,6 +72,10 @@ export const defaultSettings: Settings = {
   spellcheck: false,
   confirmDelete: true,
   onboardingComplete: false,
+  showRibbon: true,
+  showStatusBar: true,
+  dailyNoteFolder: "",
+  disabledPlugins: [],
   defaultFileToOpen: "last",
   defaultFile: "",
   alwaysFocusNewTabs: true,
@@ -84,6 +107,7 @@ interface AppState {
   sidebarView: SidebarView;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  fileSort: FileSort;
   rightPanelOpen: boolean;
   rightPanel: RightPanel;
   expanded: Record<string, boolean>;
@@ -95,6 +119,7 @@ interface AppState {
   graphScope: GraphScope;
   graphDepth: number;
   graphGroups: GraphGroup[];
+  bookmarks: Bookmark[];
   savingCount: number;
   cursor: { line: number; col: number };
   searchQuery: string;
@@ -126,6 +151,7 @@ interface AppState {
   setSidebarView: (view: SidebarView) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
+  setFileSort: (sort: FileSort) => void;
   setRightPanelOpen: (open: boolean) => void;
   setRightPanel: (panel: RightPanel) => void;
   toggleRightPanel: (panel?: RightPanel) => void;
@@ -149,6 +175,10 @@ interface AppState {
   addGraphGroup: (group: GraphGroup) => void;
   updateGraphGroup: (id: string, patch: Partial<Omit<GraphGroup, "id">>) => void;
   removeGraphGroup: (id: string) => void;
+  toggleBookmark: (bookmark: Bookmark) => void;
+  createCanvas: () => Promise<void>;
+  createBase: () => Promise<void>;
+  openDailyNote: () => Promise<void>;
   newTab: () => void;
   closeTab: (id: string) => Promise<void>;
   activateTab: (id: string) => void;
@@ -195,7 +225,7 @@ interface AppState {
 const emptyTab = (): Tab => ({
   id: uid(),
   kind: "empty",
-  title: "New tab",
+  title: t("New tab"),
   content: "",
   savedContent: "",
   mode: "edit",
@@ -214,6 +244,19 @@ const noteTab = (path: string, content: string, mode: NoteMode, history?: string
   history: history ?? [path],
   historyIndex: historyIndex ?? 0,
 });
+
+const fileTab = (
+  path: string,
+  content: string,
+  mode: NoteMode,
+  history?: string[],
+  historyIndex?: number,
+): Tab => {
+  const tab = noteTab(path, content, mode, history, historyIndex);
+  if (isBasePath(path)) return { ...tab, kind: "base", title: fileTitleFromPath(path) };
+  if (isCanvasPath(path)) return { ...tab, kind: "canvas", title: fileTitleFromPath(path) };
+  return tab;
+};
 
 let saveTimers = new Map<string, number>();
 let settingsTimer: number | undefined;
@@ -276,6 +319,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarView: "files",
   sidebarOpen: true,
   sidebarWidth: 280,
+  fileSort: "name",
   rightPanelOpen: false,
   rightPanel: "outline",
   expanded: {},
@@ -287,6 +331,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   graphScope: "global",
   graphDepth: 2,
   graphGroups: [],
+  bookmarks: [],
   savingCount: 0,
   cursor: { line: 1, col: 1 },
   searchQuery: "",
@@ -296,7 +341,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   switcherOpen: false,
   paletteOpen: false,
   settingsOpen: false,
-  settingsSection: "appearance",
+  settingsSection: "general",
   importOpen: false,
   vaultsOpen: false,
   vaultMenuOpen: false,
@@ -311,6 +356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const settings = await api.getSettings();
       const merged = { ...defaultSettings, ...settings };
       applyTheme(merged.theme);
+      setLanguage(merged.language);
       set({ settings: merged });
       if (merged.lastVault) {
         await get().openVaultByPath(merged.lastVault);
@@ -330,9 +376,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       const active = previous.tabs.find((tab) => tab.id === previous.activeTabId);
       saveWorkspace(previous.vault.path, {
         tabs: previous.tabs
-          .filter((tab) => tab.kind === "note" && tab.path)
+          .filter(
+            (tab) =>
+              (tab.kind === "note" || tab.kind === "base" || tab.kind === "canvas") &&
+              tab.path,
+          )
           .map((tab) => ({ path: tab.path!, mode: tab.mode })),
-        activePath: active?.kind === "note" ? active.path ?? null : null,
+        activePath:
+          active && (active.kind === "note" || active.kind === "base" || active.kind === "canvas")
+            ? active.path ?? null
+            : null,
         sidebarView: previous.sidebarView,
         sidebarOpen: previous.sidebarOpen,
         rightPanelOpen: previous.rightPanelOpen,
@@ -351,7 +404,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ws.tabs.slice(0, 24).map(async (entry) => {
           try {
             const content = await api.readFile(entry.path);
-            tabs.push(noteTab(entry.path, content, entry.mode === "read" ? "read" : "edit"));
+            tabs.push(fileTab(entry.path, content, entry.mode === "read" ? "read" : "edit"));
           } catch {
             /* note was removed since the workspace was saved */
           }
@@ -364,7 +417,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       if (tabs.length === 0) tabs.push(emptyTab());
       for (const tab of tabs) {
-        if (tab.path) linkSignatures.set(tab.path, linkSignature(tab.content));
+        if (tab.path && /\.(md|markdown)$/i.test(tab.path)) {
+          linkSignatures.set(tab.path, linkSignature(tab.content));
+        }
       }
       const active = tabs.find((t) => t.path === ws.activePath) ?? tabs[0];
       let expanded = { ...ws.expanded };
@@ -376,6 +431,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // Startup preference: last workspace, a blank tab, or a specific note.
       const mergedSettings: Settings = { ...defaultSettings, ...settings };
+      setLanguage(mergedSettings.language);
       let startTabs = tabs;
       let activeTab = active;
       const startup = mergedSettings.defaultFileToOpen;
@@ -395,7 +451,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         } else if (insideVault && (await api.fileExists(wanted))) {
           try {
             const content = await api.readFile(wanted);
-            const tab = noteTab(wanted, content, "edit");
+            const tab = fileTab(wanted, content, "edit");
             startTabs = [...startTabs, tab];
             activeTab = tab;
             for (const folder of ancestorsOf(vault.path, wanted)) expanded[folder] = true;
@@ -405,7 +461,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      const restoredView: SidebarView = ws.sidebarView === "search" ? "search" : "files";
+      const restoredView: SidebarView =
+        ws.sidebarView === "search" || ws.sidebarView === "bookmarks" ? ws.sidebarView : "files";
       set({
         vault,
         settings: mergedSettings,
@@ -426,6 +483,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         graphFocusPath: null,
         graphScope: "global",
         graphGroups: loadGraphGroups(vault.path),
+        bookmarks: loadBookmarks(vault.path),
         initializing: false,
         ready: true,
         graph: null,
@@ -436,7 +494,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       void get().refreshGraph();
     } catch (error) {
       set({ initializing: false, ready: true });
-      get().toast(`Could not open vault: ${String(error)}`, "error");
+      get().toast(t("Could not open vault: {error}", { error: String(error) }), "error");
     }
   },
 
@@ -445,13 +503,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const selected = await openDialog({
         directory: true,
         multiple: false,
-        title: "Open folder as vault",
+        title: t("Open folder as vault"),
       });
       if (typeof selected === "string" && selected) {
         await get().openVaultByPath(selected);
       }
     } catch (error) {
-      get().toast(`Could not open the folder picker: ${String(error)}`, "error");
+      get().toast(t("Could not open the folder picker: {error}", { error: String(error) }), "error");
     }
   },
 
@@ -460,26 +518,26 @@ export const useAppStore = create<AppState>((set, get) => ({
       const parent = await openDialog({
         directory: true,
         multiple: false,
-        title: "Choose a folder for the new vault",
+        title: t("Choose a folder for the new vault"),
       });
       if (typeof parent !== "string" || !parent) return;
       get().setPrompt({
-        title: "Create new vault",
-        label: "Vault name",
-        initial: "My vault",
-        placeholder: "My vault",
-        confirmLabel: "Create vault",
+        title: t("Create new vault"),
+        label: t("Vault name"),
+        initial: t("My vault"),
+        placeholder: t("My vault"),
+        confirmLabel: t("Create vault"),
         onSubmit: async (name) => {
           try {
             const folder = await api.createFolder(parent, name);
             await get().openVaultByPath(folder);
           } catch (error) {
-            get().toast(`Could not create vault: ${String(error)}`, "error");
+            get().toast(t("Could not create vault: {error}", { error: String(error) }), "error");
           }
         },
       });
     } catch (error) {
-      get().toast(`Could not open the folder picker: ${String(error)}`, "error");
+      get().toast(t("Could not open the folder picker: {error}", { error: String(error) }), "error");
     }
   },
 
@@ -499,6 +557,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       graphFocusPath: null,
       graphScope: "global",
       graphGroups: [],
+      bookmarks: [],
       searchQuery: "",
       searchResults: [],
       searchLoading: false,
@@ -559,6 +618,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       set({ sidebarView: view, sidebarOpen: true });
     }
+  },
+
+  setFileSort(sort) {
+    set({ fileSort: sort });
   },
 
   toggleSidebar() {
@@ -711,7 +774,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().openNote(path, { newTab: false });
       scheduleGraphRefresh(500);
     } catch (error) {
-      get().toast(`Could not create note: ${String(error)}`, "error");
+      get().toast(t("Could not create note: {error}", { error: String(error) }), "error");
     }
   },
 
@@ -742,7 +805,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       scheduleGraphRefresh(700);
       return path;
     } catch (error) {
-      get().toast(`Could not create note: ${String(error)}`, "error");
+      get().toast(t("Could not create note: {error}", { error: String(error) }), "error");
       return null;
     }
   },
@@ -759,7 +822,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshTree();
       set({ selectedPath: path, renamingPath: path });
     } catch (error) {
-      get().toast(`Could not create folder: ${String(error)}`, "error");
+      get().toast(t("Could not create folder: {error}", { error: String(error) }), "error");
     }
   },
 
@@ -789,7 +852,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ tabs, activeTabId, selectedPath: null, renamingPath: null });
         await get().refreshTree();
         scheduleGraphRefresh(300);
-        get().toast(`${isDir ? "Folder" : "Note"} deleted`, "info");
+        get().toast(isDir ? t("Folder deleted") : t("Note deleted"), "info");
       } catch (error) {
         get().toast(String(error), "error");
       }
@@ -798,9 +861,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.settings.confirmDelete) {
       set({
         confirm: {
-          title: `Delete ${isDir ? "folder" : "note"}?`,
-          message: `“${name}” will be permanently deleted. This cannot be undone.`,
-          confirmLabel: "Delete",
+          title: isDir ? t("Delete folder?") : t("Delete note?"),
+          message: t("“{name}” will be permanently deleted. This cannot be undone.", { name }),
+          confirmLabel: t("Delete"),
           danger: true,
           onConfirm: perform,
         },
@@ -851,7 +914,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     if (!state.vault) return null;
     const vaultPath = state.vault.path;
-    const existing = state.tabs.find((tab) => tab.kind === "note" && tab.path === path);
+    const existing = state.tabs.find(
+      (tab) =>
+        tab.path === path &&
+        (tab.kind === "note" || tab.kind === "base" || tab.kind === "canvas"),
+    );
     if (existing) {
       set({ activeTabId: existing.id, selectedPath: path });
       expandAncestors(path);
@@ -863,7 +930,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       content = await api.readFile(path);
     } catch (error) {
-      get().toast(`Could not open note: ${String(error)}`, "error");
+      get().toast(t("Could not open note: {error}", { error: String(error) }), "error");
       void get().refreshTree();
       return null;
     }
@@ -872,31 +939,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     const current = get();
     const activeIndex = current.tabs.findIndex((tab) => tab.id === current.activeTabId);
     const active = activeIndex >= 0 ? current.tabs[activeIndex] : null;
+    const activeIsFile =
+      active != null &&
+      (active.kind === "note" || active.kind === "base" || active.kind === "canvas");
     const replaceActive =
       !opts.newTab &&
       active != null &&
       (active.kind === "empty" ||
-        (active.kind === "note" && opts.pushHistory !== false && active.path !== path));
+        (activeIsFile && opts.pushHistory !== false && active.path !== path));
 
     let tabId: string;
     if (replaceActive && active && activeIndex >= 0) {
       // Never discard unsaved edits when a note is replaced in the active tab.
-      if (active.kind === "note" && active.content !== active.savedContent) {
+      if (activeIsFile && active.content !== active.savedContent) {
         await get().saveTab(active.id);
       }
       const history =
-        active.kind === "note" && active.path
+        activeIsFile && active.path
           ? [...active.history.slice(0, active.historyIndex + 1), path]
           : [path];
       const replaced: Tab = {
         ...active,
-        kind: "note",
-        path,
-        title: titleFromPath(path),
-        content,
-        savedContent: content,
-        history,
-        historyIndex: history.length - 1,
+        ...fileTab(path, content, opts.mode ?? "edit", history, history.length - 1),
+        id: active.id,
         pendingLine: null,
         error: undefined,
       };
@@ -907,7 +972,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       tabId = replaced.id;
     } else {
-      const tab = noteTab(path, content, opts.mode ?? "edit");
+      const tab = fileTab(path, content, opts.mode ?? "edit");
       const focusNew = !opts.newTab || get().settings.alwaysFocusNewTabs;
       set((s) => ({
         tabs: [...s.tabs, tab],
@@ -917,7 +982,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       tabId = tab.id;
     }
 
-    linkSignatures.set(path, linkSignature(content));
+    if (tabId && /\.(md|markdown)$/i.test(path)) {
+      linkSignatures.set(path, linkSignature(content));
+    }
     expandAncestors(path);
     api.addRecentFile(path).catch(() => undefined);
     set((s) => ({
@@ -948,7 +1015,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const tab: Tab = {
       id: uid(),
       kind: "graph",
-      title: "Graph",
+      title: t("Graph"),
       content: "",
       savedContent: "",
       mode: "edit",
@@ -1011,6 +1078,91 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (vault) saveGraphGroups(vault.path, groups);
   },
 
+  toggleBookmark(bookmark) {
+    const vault = get().vault;
+    if (!vault) return;
+    const exists = get().bookmarks.some((item) => item.path === bookmark.path);
+    const bookmarks = exists
+      ? get().bookmarks.filter((item) => item.path !== bookmark.path)
+      : [...get().bookmarks, bookmark];
+    set({ bookmarks });
+    saveBookmarks(vault.path, bookmarks);
+  },
+
+  async createCanvas() {
+    const state = get();
+    if (!state.vault) return;
+    const active = activeTabOf(state.tabs, state.activeTabId);
+    const dir = active?.path ? dirname(active.path) : state.vault.path;
+    const base = t("Untitled canvas");
+    let path = joinPath(dir, `${base}.canvas`);
+    let index = 1;
+    while (await api.fileExists(path)) {
+      path = joinPath(dir, `${base} ${index}.canvas`);
+      index += 1;
+    }
+    try {
+      const content = DEFAULT_CANVAS.replace("New canvas", t("New canvas")).replace(
+        "Double-click to edit this card.",
+        t("Double-click to edit this card."),
+      );
+      await api.writeFile(path, content);
+      set({ sidebarView: "files", sidebarOpen: true });
+      await get().refreshTree();
+      await get().openNote(path, { newTab: false });
+    } catch (error) {
+      get().toast(t("Could not create canvas"), "error");
+    }
+  },
+
+  async createBase() {
+    const state = get();
+    if (!state.vault) return;
+    const active = activeTabOf(state.tabs, state.activeTabId);
+    const dir = active?.path ? dirname(active.path) : state.vault.path;
+    const base = t("Untitled base");
+    let path = joinPath(dir, `${base}.base`);
+    let index = 1;
+    while (await api.fileExists(path)) {
+      path = joinPath(dir, `${base} ${index}.base`);
+      index += 1;
+    }
+    try {
+      await api.writeFile(path, DEFAULT_BASE);
+      set({ sidebarView: "files", sidebarOpen: true });
+      await get().refreshTree();
+      await get().openNote(path, { newTab: false });
+    } catch (error) {
+      get().toast(t("Could not create database"), "error");
+    }
+  },
+
+  async openDailyNote() {
+    const state = get();
+    if (!state.vault) return;
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate(),
+    ).padStart(2, "0")}`;
+    const folder = state.settings.dailyNoteFolder.trim().replace(/^\/+|\/+$/g, "");
+    const dir = folder
+      ? await api.ensureVaultFolder(state.vault.path, folder).catch(() => state.vault!.path)
+      : state.vault.path;
+    const path = joinPath(dir, `${date}.md`);
+    try {
+      if (!(await api.fileExists(path))) {
+        await api.writeFile(path, `# ${date}\n\n`);
+      }
+      await get().refreshTree();
+      await get().openNote(path, { newTab: false });
+      for (const parent of ancestorsOf(state.vault.path, path)) {
+        get().setExpanded(parent, true);
+      }
+    } catch (error) {
+      get().toast(t("Could not open note: {error}", { error: String(error) }), "error");
+    }
+  },
+
   newTab() {
     const tab = emptyTab();
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, selectedPath: null }));
@@ -1054,7 +1206,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   async saveTab(id) {
     const tab = get().tabs.find((t) => t.id === id);
-    if (!tab || tab.kind !== "note" || !tab.path) return;
+    if (
+      !tab ||
+      !tab.path ||
+      (tab.kind !== "note" && tab.kind !== "base" && tab.kind !== "canvas")
+    )
+      return;
     if (tab.content === tab.savedContent) return;
     const path = tab.path;
     const content = tab.content;
@@ -1069,11 +1226,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           t.id === id ? { ...t, savedContent: content } : t,
         ),
       }));
-      const signature = linkSignature(content);
-      const previous = linkSignatures.get(path);
-      linkSignatures.set(path, signature);
-      if (previous !== undefined && previous !== signature) {
-        scheduleGraphRefresh(1500);
+      if (tab.kind === "note") {
+        const signature = linkSignature(content);
+        const previous = linkSignatures.get(path);
+        linkSignatures.set(path, signature);
+        if (previous !== undefined && previous !== signature) {
+          scheduleGraphRefresh(1500);
+        }
       }
       const latest = get().tabs.find((t) => t.id === id);
       if (latest && latest.content !== latest.savedContent && get().settings.autoSave) {
@@ -1081,7 +1240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (error) {
       set((s) => ({ savingCount: Math.max(0, s.savingCount - 1) }));
-      get().toast(`Could not save “${basename(path)}”: ${String(error)}`, "error");
+      get().toast(t("Could not save “{name}”: {error}", { name: basename(path), error: String(error) }), "error");
     }
   },
 
@@ -1091,7 +1250,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   async saveAll() {
-    const tabs = get().tabs.filter((t) => t.kind === "note");
+    const tabs = get().tabs.filter(
+      (t) => t.kind === "note" || t.kind === "base" || t.kind === "canvas",
+    );
     await Promise.all(tabs.map((t) => get().saveTab(t.id)));
   },
 
@@ -1135,7 +1296,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       linkSignatures.set(target, linkSignature(content));
       expandAncestors(target);
     } catch {
-      get().toast("That note no longer exists", "error");
+      get().toast(t("That note no longer exists"), "error");
     }
   },
 
@@ -1165,15 +1326,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       attachment != null &&
       flattenAllFiles(state.tree).some((file) => file.path === attachment);
     if (attachment && exists) {
+      if (isBasePath(attachment) || isCanvasPath(attachment)) {
+        await get().openNote(attachment, { newTab: false });
+        return;
+      }
       try {
         await openLocalPath(attachment);
       } catch (error) {
-        get().toast(`Could not open attachment: ${String(error)}`, "error");
+        get().toast(t("Could not open attachment: {error}", { error: String(error) }), "error");
       }
       return;
     }
     if (looksLikeAttachment(clean)) {
-      get().toast(`Attachment not found: ${clean}`, "error");
+      get().toast(t("Attachment not found: {name}", { name: clean }), "error");
       return;
     }
     const parent = fromPath ? dirname(fromPath) : state.vault.path;
@@ -1181,7 +1346,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const path = await api.createNote(parent, clean.split("/").pop() || "Untitled");
       await get().refreshTree();
       await get().openNote(path, { newTab: false });
-      get().toast("Note created", "success");
+      get().toast(t("Note created"), "success");
     } catch (error) {
       get().toast(String(error), "error");
     }
@@ -1221,6 +1386,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const settings = { ...get().settings, ...patch };
     set({ settings });
     if (patch.theme) applyTheme(patch.theme);
+    if (patch.language) setLanguage(patch.language);
     if (settingsTimer) window.clearTimeout(settingsTimer);
     settingsTimer = window.setTimeout(() => {
       settingsTimer = undefined;
@@ -1310,11 +1476,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const result = await api.importVault(kind, source, parent, name);
       await get().openVaultByPath(result.path);
-      const label = result.imported === 1 ? "note" : "notes";
-      get().toast(`Imported ${result.imported} ${label}`, "success");
+      get().toast(t("Imported {n} notes", { n: result.imported }), "success");
       return result;
     } catch (error) {
-      get().toast(`Import failed: ${String(error)}`, "error");
+      get().toast(t("Import failed: {error}", { error: String(error) }), "error");
       return null;
     }
   },
@@ -1359,7 +1524,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const stateNow = get();
       let contentChanged = false;
       for (const tab of stateNow.tabs) {
-        if (tab.kind !== "note" || !tab.path) continue;
+        if (
+          !tab.path ||
+          (tab.kind !== "note" && tab.kind !== "base" && tab.kind !== "canvas")
+        )
+          continue;
         if (!pending.some((p) => p === tab.path || tab.path?.startsWith(`${p}/`))) continue;
         if (tab.content !== tab.savedContent) continue;
         if (isRecentSelfSave(tab.path)) continue;
@@ -1371,7 +1540,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
           const content = await api.readFile(tab.path);
           if (content !== tab.content) {
-            linkSignatures.set(tab.path, linkSignature(content));
+            if (tab.kind === "note") {
+              linkSignatures.set(tab.path, linkSignature(content));
+            }
             contentChanged = true;
             set((s) => ({
               tabs: s.tabs.map((t) =>
@@ -1410,3 +1581,9 @@ export const noteList = (tree: FileNode[]) => flattenNotes(tree);
 
 export const searchNotes = (tree: FileNode[], query: string) =>
   fuzzyFilter(flattenNotes(tree), query, (note) => `${note.title} ${note.folder}`);
+
+// Development-only handle for diagnostics and UI automation.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  const handle = window as unknown as { __GLOWSTONE_STORE__?: typeof useAppStore };
+  if (!handle.__GLOWSTONE_STORE__) handle.__GLOWSTONE_STORE__ = useAppStore;
+}

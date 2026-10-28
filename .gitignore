@@ -7,3 +7,6 @@ src-tauri/target
 src-tauri/gen
 app-icon.png
 /1. 000097119(2).png
+
+# Vite dependency cache
+.vite

@@ -3,11 +3,15 @@ import {
   Circle,
   CircleDot,
   Maximize2,
+  Palette,
+  Plus,
   RefreshCw,
   Search,
   Settings2,
   Tag,
+  Trash2,
   Waypoints,
+  X,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -15,7 +19,14 @@ import {
 import { useAppStore } from "../store";
 import { GraphCanvas, type GraphCanvasHandle } from "./GraphCanvas";
 import { Popover } from "./Popover";
-import { noteIdFromPath } from "../lib/utils";
+import { noteIdFromPath, uid } from "../lib/utils";
+import { api } from "../lib/api";
+import {
+  GROUP_COLORS,
+  commonWords,
+  groupNameFromWords,
+  wordsOf,
+} from "../lib/graphGroups";
 
 export function GraphView() {
   const graph = useAppStore((s) => s.graph);
@@ -29,6 +40,11 @@ export function GraphView() {
   const depth = useAppStore((s) => s.graphDepth);
   const setScope = useAppStore((s) => s.setGraphScope);
   const setDepth = useAppStore((s) => s.setGraphDepth);
+  const groups = useAppStore((s) => s.graphGroups);
+  const addGraphGroup = useAppStore((s) => s.addGraphGroup);
+  const updateGraphGroup = useAppStore((s) => s.updateGraphGroup);
+  const removeGraphGroup = useAppStore((s) => s.removeGraphGroup);
+  const toast = useAppStore((s) => s.toast);
   const activeNotePath = useAppStore((s) => {
     const tab = s.tabs.find((item) => item.id === s.activeTabId);
     return tab?.kind === "note" ? tab.path ?? null : null;
@@ -40,6 +56,7 @@ export function GraphView() {
   const [repulsion, setRepulsion] = useState(1800);
   const [linkDistance, setLinkDistance] = useState(70);
   const [gravity, setGravity] = useState(0.003);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const canvasRef = useRef<GraphCanvasHandle>(null);
 
   const focus = focusPath ?? activeNotePath;
@@ -102,6 +119,56 @@ export function GraphView() {
     setRepulsion(1800);
     setLinkDistance(70);
     setGravity(0.003);
+  };
+
+  const selectedNodes = useMemo(
+    () => data.nodes.filter((node) => selectedIds.includes(node.id)),
+    [data.nodes, selectedIds],
+  );
+
+  const createGroupFromSelection = async () => {
+    if (selectedNodes.length < 2) return;
+    const titleTexts = selectedNodes.map((node) => `${node.title} ${node.folder}`);
+    let words = commonWords(titleTexts);
+    if (words.length === 0) {
+      // Titles may be unrelated; fall back to the words the notes themselves share.
+      const contents = await Promise.all(
+        selectedNodes.map(async (node) => {
+          if (!node.path || node.unresolved) return "";
+          try {
+            return (await api.readFile(node.path)).slice(0, 8000);
+          } catch {
+            return "";
+          }
+        }),
+      );
+      const texts = titleTexts.map((text, index) => `${text} ${contents[index] ?? ""}`);
+      words = commonWords(texts);
+      if (words.length === 0) {
+        const counts = new Map<string, number>();
+        for (const text of texts) {
+          for (const word of new Set(wordsOf(text))) {
+            counts.set(word, (counts.get(word) ?? 0) + 1);
+          }
+        }
+        words = [...counts.entries()]
+          .filter(([, count]) => count >= 2)
+          .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+          .slice(0, 4)
+          .map(([word]) => word);
+      }
+    }
+    if (words.length === 0) {
+      toast("Those notes do not share any words", "info");
+      return;
+    }
+    const name = groupNameFromWords(words);
+    const color =
+      GROUP_COLORS.find((candidate) => !groups.some((group) => group.color === candidate)) ??
+      GROUP_COLORS[groups.length % GROUP_COLORS.length];
+    addGraphGroup({ id: uid(), name, color, terms: words });
+    setSelectedIds([]);
+    toast(`Group “${name}” created`, "success");
   };
 
   return (
@@ -188,6 +255,86 @@ export function GraphView() {
           >
             <RefreshCw size={16} />
           </button>
+          <Popover
+            align="right"
+            width={320}
+            trigger={({ toggle, open }) => (
+              <button
+                className={`icon-button graph-groups-button ${open ? "active" : ""}`}
+                onClick={toggle}
+                title="Graph groups"
+                aria-label="Graph groups"
+              >
+                <Palette size={16} />
+                {groups.length > 0 && <span className="graph-group-count">{groups.length}</span>}
+              </button>
+            )}
+          >
+            {() => (
+              <div className="graph-groups">
+                <div className="graph-settings-title">Groups</div>
+                <button
+                  className="menu-item"
+                  disabled={selectedNodes.length < 2}
+                  onClick={createGroupFromSelection}
+                >
+                  <Plus size={14} />
+                  <span>
+                    Group selected notes
+                    {selectedNodes.length > 0 ? ` (${selectedNodes.length})` : ""}
+                  </span>
+                </button>
+                {groups.length === 0 ? (
+                  <div className="graph-settings-hint">
+                    Shift-click notes on the graph to select several, then group them by the words
+                    they share.
+                  </div>
+                ) : (
+                  <div className="graph-group-list">
+                    {groups.map((group) => (
+                      <div className="graph-group-row" key={group.id}>
+                        <label
+                          className="graph-group-color"
+                          title="Dot color"
+                          style={{ background: group.color }}
+                        >
+                          <input
+                            type="color"
+                            value={group.color}
+                            onChange={(event) =>
+                              updateGraphGroup(group.id, { color: event.target.value })
+                            }
+                          />
+                        </label>
+                        <div className="graph-group-copy">
+                          <input
+                            className="graph-group-name"
+                            value={group.name}
+                            spellCheck={false}
+                            onChange={(event) =>
+                              updateGraphGroup(group.id, { name: event.target.value })
+                            }
+                          />
+                          <span className="graph-group-terms">{group.terms.join(" · ")}</span>
+                        </div>
+                        <button
+                          className="icon-button"
+                          title="Delete group"
+                          aria-label="Delete group"
+                          onClick={() => removeGraphGroup(group.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="graph-settings-hint">
+                  A group colors every note whose title, folder or path contains all of its words.
+                </div>
+              </div>
+            )}
+          </Popover>
           <Popover
             align="right"
             width={260}
@@ -310,8 +457,35 @@ export function GraphView() {
             linkDistance={linkDistance}
             gravity={gravity}
             filter={query}
+            groups={groups}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
             onOpenNote={(path) => void openNote(path, { newTab: false })}
           />
+        )}
+
+        {selectedIds.length > 0 && (
+          <div className="graph-selection-bar">
+            <span className="graph-selection-count">
+              {selectedIds.length} selected
+            </span>
+            <button
+              className="btn btn-primary btn-small"
+              disabled={selectedIds.length < 2}
+              onClick={createGroupFromSelection}
+            >
+              <Plus size={13} />
+              Group notes
+            </button>
+            <button
+              className="icon-button"
+              onClick={() => setSelectedIds([])}
+              title="Clear selection"
+              aria-label="Clear selection"
+            >
+              <X size={14} />
+            </button>
+          </div>
         )}
 
         <div className="graph-legend">
@@ -321,6 +495,11 @@ export function GraphView() {
           <span className="legend-item">
             <span className="legend-dot unresolved" /> Unresolved
           </span>
+          {groups.map((group) => (
+            <span className="legend-item" key={group.id}>
+              <span className="legend-dot" style={{ background: group.color }} /> {group.name}
+            </span>
+          ))}
         </div>
         {loading && <div className="graph-loading">Building graph…</div>}
         {filtered.length !== data.nodes.length && (

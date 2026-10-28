@@ -23,9 +23,15 @@ import {
   Pilcrow,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
-import { runEditorCommand, insertTable } from "../editor/commands";
-import { isTauri } from "../lib/api";
+import { runEditorCommand, insertTable, insertAttachment } from "../editor/commands";
+import { isTauri, api } from "../lib/api";
+import {
+  attachmentFolderFor,
+  attachmentMarkdown,
+} from "../lib/attachments";
+import { basename } from "../lib/utils";
 import { Popover } from "./Popover";
 
 const colors = ["#e3b341", "#e06c75", "#98c379", "#61afef", "#c678dd", "#56b6c2"];
@@ -95,6 +101,52 @@ export function EditorToolbar() {
     runEditorCommand(command);
   };
 
+  const pickImage = async () => {
+    const state = useAppStore.getState();
+    if (!state.vault) {
+      state.toast("Open a vault before adding an image", "error");
+      return;
+    }
+    const active = state.tabs.find((item) => item.id === state.activeTabId);
+    if (!active || active.kind !== "note" || !active.path) {
+      state.toast("Open a note before adding an image", "error");
+      return;
+    }
+    if (!isTauri()) {
+      runEditorCommand("image");
+      return;
+    }
+    try {
+      const selected = await openDialog({
+        multiple: true,
+        title: "Add images",
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "svg"],
+          },
+        ],
+      });
+      if (!selected) return;
+      const paths = Array.isArray(selected) ? selected : [selected];
+      if (paths.length === 0) return;
+      const folder = attachmentFolderFor(state.vault.path, active.path, state.settings);
+      for (const source of paths) {
+        try {
+          const saved = await api.copyAttachment(state.vault.path, folder, source);
+          insertAttachment(
+            attachmentMarkdown(state.vault.path, active.path, saved, basename(source)),
+          );
+        } catch (error) {
+          state.toast(`Could not add image: ${String(error)}`, "error");
+        }
+      }
+      await state.refreshTree();
+    } catch (error) {
+      state.toast(`Could not open the image picker: ${String(error)}`, "error");
+    }
+  };
+
   const toggleFullscreen = async () => {
     if (!isTauri()) return;
     try {
@@ -118,7 +170,7 @@ export function EditorToolbar() {
       </div>
       <div className="toolbar-separator" />
       <div className="toolbar-group">
-        <ToolButton label="Paragraph" onClick={run("paragraph")} optional>
+        <ToolButton label="Paragraph" onClick={run("paragraph")}>
           <Pilcrow size={16} />
         </ToolButton>
         <ToolButton label="Inline code" shortcut="Ctrl+`" onClick={run("inlineCode")}>
@@ -229,7 +281,7 @@ export function EditorToolbar() {
         <ToolButton label="Task list" onClick={run("taskList")}>
           <ListChecks size={16} />
         </ToolButton>
-        <ToolButton label="Image" onClick={run("image")}>
+        <ToolButton label="Image" onClick={() => void pickImage()}>
           <ImageIcon size={16} />
         </ToolButton>
         <ToolButton label="Quote" onClick={run("quote")}>

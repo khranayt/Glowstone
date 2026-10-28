@@ -3,6 +3,9 @@ export type SidebarView = "files" | "search";
 export type GraphScope = "global" | "local";
 export type RightPanel = "outline" | "backlinks";
 export type NoteMode = "edit" | "read";
+export type DefaultFileMode = "last" | "new" | "specific";
+export type NewNoteLocation = "root" | "current" | "folder";
+export type AttachmentLocation = "root" | "current" | "subfolder" | "folder";
 
 export interface Settings {
   theme: Theme;
@@ -13,6 +16,13 @@ export interface Settings {
   spellcheck: boolean;
   confirmDelete: boolean;
   onboardingComplete: boolean;
+  defaultFileToOpen: DefaultFileMode;
+  defaultFile: string;
+  alwaysFocusNewTabs: boolean;
+  newNoteLocation: NewNoteLocation;
+  newNoteFolder: string;
+  attachmentLocation: AttachmentLocation;
+  attachmentFolder: string;
   lastVault: string | null;
   recentVaults: string[];
   recentFiles: string[];
@@ -49,6 +59,13 @@ export interface GraphLink {
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
+}
+
+export interface GraphGroup {
+  id: string;
+  name: string;
+  color: string;
+  terms: string[];
 }
 
 export type ImportKind =

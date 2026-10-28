@@ -26,6 +26,13 @@ pub struct Settings {
     pub spellcheck: bool,
     pub confirm_delete: bool,
     pub onboarding_complete: bool,
+    pub default_file_to_open: String,
+    pub default_file: String,
+    pub always_focus_new_tabs: bool,
+    pub new_note_location: String,
+    pub new_note_folder: String,
+    pub attachment_location: String,
+    pub attachment_folder: String,
     pub last_vault: Option<String>,
     pub recent_vaults: Vec<String>,
     pub recent_files: Vec<String>,
@@ -42,6 +49,13 @@ impl Default for Settings {
             spellcheck: false,
             confirm_delete: true,
             onboarding_complete: false,
+            default_file_to_open: "last".into(),
+            default_file: String::new(),
+            always_focus_new_tabs: true,
+            new_note_location: "current".into(),
+            new_note_folder: String::new(),
+            attachment_location: "folder".into(),
+            attachment_folder: "attachments".into(),
             last_vault: None,
             recent_vaults: Vec::new(),
             recent_files: Vec::new(),
@@ -463,6 +477,73 @@ fn read_attachment(path: String) -> Result<String, String> {
         .first_or_octet_stream()
         .to_string();
     Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
+}
+
+/// Resolve a vault-relative folder, refusing anything that escapes the vault.
+fn vault_subfolder(vault: &str, folder: &str) -> Result<PathBuf, String> {
+    let root = PathBuf::from(vault);
+    if !root.is_dir() {
+        return Err("Vault folder does not exist".into());
+    }
+    let mut out = root;
+    for part in folder.replace('\\', "/").split('/') {
+        if part.is_empty() || part == "." {
+            continue;
+        }
+        if part == ".." {
+            return Err("Folder must stay inside the vault".into());
+        }
+        out.push(part);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn ensure_vault_folder(vault: String, folder: String) -> Result<String, String> {
+    let dir = vault_subfolder(&vault, &folder)?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Could not create folder: {e}"))?;
+    Ok(norm(&dir))
+}
+
+#[tauri::command]
+fn save_attachment(
+    vault: String,
+    folder: String,
+    name: String,
+    data: String,
+) -> Result<String, String> {
+    let dir = vault_subfolder(&vault, &folder)?;
+    let bytes = BASE64
+        .decode(data.as_bytes())
+        .map_err(|_| "Invalid attachment data".to_string())?;
+    if bytes.len() > 40 * 1024 * 1024 {
+        return Err("File is too large".into());
+    }
+    fs::create_dir_all(&dir).map_err(|e| format!("Could not create folder: {e}"))?;
+    let cleaned = sanitize_name(&name);
+    let path = unique_path(&dir, &cleaned, None);
+    fs::write(&path, bytes).map_err(|e| format!("Could not save attachment: {e}"))?;
+    Ok(norm(&path))
+}
+
+#[tauri::command]
+fn copy_attachment(vault: String, folder: String, source: String) -> Result<String, String> {
+    let dir = vault_subfolder(&vault, &folder)?;
+    let src = PathBuf::from(&source);
+    let meta = fs::metadata(&src).map_err(|_| "File not found".to_string())?;
+    if meta.len() > 40 * 1024 * 1024 {
+        return Err("File is too large".into());
+    }
+    fs::create_dir_all(&dir).map_err(|e| format!("Could not create folder: {e}"))?;
+    let name = src
+        .file_name()
+        .ok_or("Invalid file")?
+        .to_string_lossy()
+        .to_string();
+    let cleaned = sanitize_name(&name);
+    let dest = unique_path(&dir, &cleaned, None);
+    fs::copy(&src, &dest).map_err(|e| format!("Could not copy attachment: {e}"))?;
+    Ok(norm(&dest))
 }
 
 // ---------------------------------------------------------------------------
@@ -1325,6 +1406,9 @@ pub fn run() {
             delete_entry,
             file_exists,
             read_attachment,
+            ensure_vault_folder,
+            save_attachment,
+            copy_attachment,
             search_vault,
             get_graph,
             import_vault
@@ -1440,6 +1524,62 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(!results[0].matches.is_empty());
         assert!(results[0].matches[0].text.chars().count() <= 301);
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn attachment_commands_stay_inside_the_vault() {
+        let root = scratch("attachments");
+        let vault = root.join("vault");
+        fs::create_dir_all(&vault).unwrap();
+
+        let folder = ensure_vault_folder(
+            vault.to_string_lossy().to_string(),
+            "notes/assets".into(),
+        )
+        .unwrap();
+        assert!(Path::new(&folder).is_dir());
+
+        let saved = save_attachment(
+            vault.to_string_lossy().to_string(),
+            "notes/assets".into(),
+            "picture one.png".into(),
+            BASE64.encode([0u8, 1, 2, 3]),
+        )
+        .unwrap();
+        assert_eq!(fs::read(&saved).unwrap(), vec![0, 1, 2, 3]);
+        assert!(saved.starts_with(folder.as_str()));
+
+        // Saving the same name must not overwrite the existing file.
+        let again = save_attachment(
+            vault.to_string_lossy().to_string(),
+            "notes/assets".into(),
+            "picture one.png".into(),
+            BASE64.encode([9u8]),
+        )
+        .unwrap();
+        assert_ne!(saved, again);
+        assert_eq!(fs::read(&saved).unwrap(), vec![0, 1, 2, 3]);
+
+        let source = root.join("external.png");
+        fs::write(&source, [7u8, 7]).unwrap();
+        let copied = copy_attachment(
+            vault.to_string_lossy().to_string(),
+            "".into(),
+            source.to_string_lossy().to_string(),
+        )
+        .unwrap();
+        assert_eq!(fs::read(&copied).unwrap(), vec![7, 7]);
+
+        assert!(ensure_vault_folder(vault.to_string_lossy().to_string(), "../escape".into()).is_err());
+        assert!(save_attachment(
+            vault.to_string_lossy().to_string(),
+            "../escape".into(),
+            "x.png".into(),
+            BASE64.encode([1u8]),
+        )
+        .is_err());
+
         fs::remove_dir_all(root).ok();
     }
 }

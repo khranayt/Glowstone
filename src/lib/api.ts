@@ -35,6 +35,12 @@ export const api = {
   fileExists: (path: string) => invoke<boolean>("file_exists", { path }),
   readAttachment: (path: string) =>
     invoke<string>("read_attachment", { path }),
+  ensureVaultFolder: (vault: string, folder: string) =>
+    invoke<string>("ensure_vault_folder", { vault, folder }),
+  saveAttachment: (vault: string, folder: string, name: string, data: string) =>
+    invoke<string>("save_attachment", { vault, folder, name, data }),
+  copyAttachment: (vault: string, folder: string, source: string) =>
+    invoke<string>("copy_attachment", { vault, folder, source }),
   searchVault: (vault: string, query: string, caseSensitive: boolean) =>
     invoke<SearchFile[]>("search_vault", { vault, query, caseSensitive }),
   getGraph: (vault: string) => invoke<GraphData>("get_graph", { vault }),

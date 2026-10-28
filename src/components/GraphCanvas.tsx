@@ -5,8 +5,9 @@ import {
   useRef,
   useState,
 } from "react";
-import type { GraphData, GraphNode } from "../types";
+import type { GraphData, GraphGroup, GraphNode } from "../types";
 import { useAppStore } from "../store";
+import { groupForNode } from "../lib/graphGroups";
 
 export interface GraphCanvasHandle {
   fit: () => void;
@@ -25,6 +26,9 @@ interface GraphCanvasProps {
   linkDistance?: number;
   gravity?: number;
   filter?: string;
+  groups?: GraphGroup[];
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
   onOpenNote: (path: string) => void;
 }
 
@@ -106,6 +110,9 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     linkDistance = 70,
     gravity = 0.003,
     filter = "",
+    groups = [],
+    selectedIds,
+    onSelectionChange,
     onOpenNote,
   },
   ref,
@@ -129,6 +136,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     dpr: 1,
     hoveredId: null as string | null,
     selectedId: null as string | null,
+    selectedIds: new Set<string>(),
     dragging: null as SimNode | null,
     dragMoved: false,
     panning: false,
@@ -141,6 +149,10 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
   optionsRef.current = { repulsion, linkDistance, gravity, labels, compact, getFiltered: filter };
   const onOpenRef = useRef(onOpenNote);
   onOpenRef.current = onOpenNote;
+  const groupsRef = useRef<GraphGroup[]>(groups);
+  groupsRef.current = groups;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
   const activeRef = useRef(activeId ?? null);
   activeRef.current = activeId ?? null;
 
@@ -198,11 +210,26 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     sim.alpha = 1;
     sim.hoveredId = null;
     sim.selectedId = null;
+    sim.selectedIds = new Set();
     sim.dragging = null;
     sim.autoFit = 50;
     sim.needsDraw = true;
     setTooltip(null);
+    onSelectionChangeRef.current?.([]);
   }, [data, filter, showUnresolved, showOrphans, compact]);
+
+  // Keep the selection in sync with the parent (for the group action).
+  useEffect(() => {
+    const sim = simRef.current;
+    const next = new Set(selectedIds ?? []);
+    const changed =
+      next.size !== sim.selectedIds.size ||
+      [...next].some((id) => !sim.selectedIds.has(id));
+    if (!changed) return;
+    sim.selectedIds = next;
+    sim.selectedId = next.size > 0 ? (selectedIds?.[selectedIds.length - 1] ?? null) : null;
+    sim.needsDraw = true;
+  }, [selectedIds]);
 
   // Keep the canvas sized to its container.
   useEffect(() => {
@@ -436,9 +463,13 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
         if (dimmed) continue;
         const isActive = activeRef.current === node.id;
         const isHovered = hovered === node;
+        const isSelected = sim.selectedIds.has(node.id);
+        const group = node.unresolved ? null : groupForNode(node, groupsRef.current);
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.r / Math.max(0.7, Math.min(1, k + 0.35)), 0, Math.PI * 2);
-        ctx.fillStyle = node.unresolved ? palette.unresolved : isHovered ? palette.nodeHover : palette.node;
+        ctx.fillStyle = node.unresolved
+          ? palette.unresolved
+          : group?.color ?? (isHovered ? palette.nodeHover : palette.node);
         ctx.globalAlpha = node.unresolved ? 0.72 : 1;
         ctx.fill();
         ctx.globalAlpha = 1;
@@ -449,11 +480,11 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
           ctx.stroke();
           ctx.setLineDash([]);
         }
-        if (isActive || isHovered) {
+        if (isActive || isHovered || isSelected) {
           ctx.beginPath();
-          ctx.arc(node.x, node.y, node.r + 3 / k, 0, Math.PI * 2);
+          ctx.arc(node.x, node.y, node.r + (isSelected ? 4 / k : 3 / k), 0, Math.PI * 2);
           ctx.strokeStyle = isActive ? palette.active : palette.nodeHover;
-          ctx.lineWidth = 1.6 / k;
+          ctx.lineWidth = (isSelected ? 2 : 1.6) / k;
           ctx.stroke();
         }
       }
@@ -507,7 +538,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
 
   useEffect(() => {
     simRef.current.needsDraw = true;
-  }, [activeId, labels]);
+  }, [activeId, labels, groups]);
 
   // Wheel zoom needs a non-passive listener.
   useEffect(() => {
@@ -585,13 +616,18 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
           sim.dragMoved = false;
           canvasRef.current?.setPointerCapture(event.pointerId);
           if (node) {
+            if (!event.shiftKey) {
+              sim.selectedIds = new Set([node.id]);
+              sim.selectedId = node.id;
+              onSelectionChangeRef.current?.(Array.from(sim.selectedIds));
+            }
             sim.dragging = node;
-            sim.selectedId = node.id;
-            sim.alpha = Math.max(sim.alpha, 0.35);
             sim.needsDraw = true;
           } else {
             sim.panning = true;
             sim.selectedId = null;
+            sim.selectedIds = new Set();
+            onSelectionChangeRef.current?.([]);
             sim.needsDraw = true;
           }
         }}
@@ -640,11 +676,26 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
             if (compact && wasDragging.path) {
               onOpenRef.current(wasDragging.path);
             } else {
-              sim.selectedId = wasDragging.id;
-              sim.needsDraw = true;
+              const simNow = simRef.current;
+              if (event.shiftKey) {
+                const next = new Set(simNow.selectedIds);
+                if (next.has(wasDragging.id)) next.delete(wasDragging.id);
+                else next.add(wasDragging.id);
+                simNow.selectedIds = next;
+                simNow.selectedId = next.has(wasDragging.id)
+                  ? wasDragging.id
+                  : Array.from(next).pop() ?? null;
+              } else {
+                simNow.selectedIds = new Set([wasDragging.id]);
+                simNow.selectedId = wasDragging.id;
+              }
+              simNow.needsDraw = true;
+              onSelectionChangeRef.current?.(Array.from(simNow.selectedIds));
             }
           } else if (!wasDragging && !moved && !node) {
             sim.selectedId = null;
+            sim.selectedIds = new Set();
+            onSelectionChangeRef.current?.([]);
             sim.needsDraw = true;
           }
         }}

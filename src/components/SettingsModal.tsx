@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   FolderClosed,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Modal } from "./Modal";
 import { useAppStore, type SettingsSection } from "../store";
+import { flattenNotes } from "../lib/utils";
 import logo from "../assets/logo.png";
 
 function Toggle({
@@ -36,6 +37,83 @@ function Toggle({
   );
 }
 
+interface Option {
+  value: string;
+  label: string;
+}
+
+function SelectSetting({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description?: string;
+  value: string;
+  options: Option[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`setting-row setting-control-row ${disabled ? "is-disabled" : ""}`}>
+      <span className="setting-copy">
+        <span className="setting-label">{label}</span>
+        {description && <span className="setting-description">{description}</span>}
+      </span>
+      <span className="setting-select-wrap">
+        <select
+          className="setting-select"
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </span>
+    </label>
+  );
+}
+
+function TextSetting({
+  label,
+  description,
+  value,
+  placeholder,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description?: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`setting-row setting-control-row ${disabled ? "is-disabled" : ""}`}>
+      <span className="setting-copy">
+        <span className="setting-label">{label}</span>
+        {description && <span className="setting-description">{description}</span>}
+      </span>
+      <input
+        className="setting-input"
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        spellCheck={false}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 export function SettingsModal() {
   const open = useAppStore((s) => s.settingsOpen);
   const section = useAppStore((s) => s.settingsSection);
@@ -48,6 +126,17 @@ export function SettingsModal() {
   const closeVault = useAppStore((s) => s.closeVault);
   const openImport = useAppStore((s) => s.openImport);
   const openVaults = useAppStore((s) => s.openVaults);
+  const tree = useAppStore((s) => s.tree);
+
+  const noteOptions = useMemo<Option[]>(() => {
+    const notes = flattenNotes(tree)
+      .map((note) => ({
+        value: note.path,
+        label: note.folder ? `${note.folder}/${note.title}` : note.title,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: "", label: "Select a file…" }, ...notes];
+  }, [tree]);
 
   const [fontSize, setFontSize] = useState(settings.fontSize);
   useEffect(() => {
@@ -213,6 +302,79 @@ export function SettingsModal() {
           {section === "files" && (
             <>
               <h3>Files & links</h3>
+              <SelectSetting
+                label="Default file to open"
+                description="Choose which file to open when the app starts."
+                value={settings.defaultFileToOpen}
+                options={[
+                  { value: "last", label: "Last opened file" },
+                  { value: "new", label: "New tab" },
+                  { value: "specific", label: "Specific file" },
+                ]}
+                onChange={(value) =>
+                  updateSettings({ defaultFileToOpen: value as typeof settings.defaultFileToOpen })
+                }
+              />
+              <SelectSetting
+                label="File to open"
+                description="Select a specific file to open by default."
+                value={settings.defaultFile}
+                options={noteOptions}
+                onChange={(value) =>
+                  updateSettings({
+                    defaultFile: value,
+                    ...(value ? { defaultFileToOpen: "specific" as const } : {}),
+                  })
+                }
+              />
+              <Toggle
+                checked={settings.alwaysFocusNewTabs}
+                onChange={(value) => updateSettings({ alwaysFocusNewTabs: value })}
+                label="Always focus new tabs"
+                description="When you open a link in a new tab, switch to it immediately."
+              />
+              <SelectSetting
+                label="Default location for new notes"
+                description="Where newly created notes are placed."
+                value={settings.newNoteLocation}
+                options={[
+                  { value: "root", label: "Vault root" },
+                  { value: "current", label: "Current folder" },
+                  { value: "folder", label: "Specified folder" },
+                ]}
+                onChange={(value) =>
+                  updateSettings({ newNoteLocation: value as typeof settings.newNoteLocation })
+                }
+              />
+              <TextSetting
+                label="Folder to create new notes in"
+                description="Newly created notes will appear in this folder."
+                value={settings.newNoteFolder}
+                placeholder="e.g. Notes/Inbox"
+                onChange={(value) => updateSettings({ newNoteFolder: value })}
+              />
+              <SelectSetting
+                label="Default location for new attachments"
+                description="Where newly added attachments are placed."
+                value={settings.attachmentLocation}
+                options={[
+                  { value: "root", label: "Vault root" },
+                  { value: "current", label: "Current folder" },
+                  { value: "subfolder", label: "Subfolder of current" },
+                  { value: "folder", label: "Specified folder" },
+                ]}
+                onChange={(value) =>
+                  updateSettings({ attachmentLocation: value as typeof settings.attachmentLocation })
+                }
+              />
+              <TextSetting
+                label="Attachment folder path"
+                description="Place newly created attachment files, such as images created via drag-and-drop or audio recordings, in this folder."
+                value={settings.attachmentFolder}
+                placeholder="attachments"
+                onChange={(value) => updateSettings({ attachmentFolder: value })}
+              />
+              <div className="setting-divider" />
               <Toggle
                 checked={settings.confirmDelete}
                 onChange={(value) => updateSettings({ confirmDelete: value })}
@@ -233,7 +395,13 @@ export function SettingsModal() {
                         {vault.path}
                       </div>
                     </div>
-                    <button className="btn btn-secondary" onClick={() => void chooseVault()}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        close();
+                        void chooseVault();
+                      }}
+                    >
                       Switch…
                     </button>
                   </div>
@@ -241,7 +409,13 @@ export function SettingsModal() {
                   <p className="setting-description">No vault is currently open.</p>
                 )}
                 <div className="setting-button-row">
-                  <button className="btn btn-secondary" onClick={() => void chooseVault()}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      close();
+                      void chooseVault();
+                    }}
+                  >
                     Open another vault…
                   </button>
                   <button className="btn btn-secondary" onClick={openVaults}>

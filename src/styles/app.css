@@ -27,7 +27,9 @@
   --interactive-accent-border: rgba(227, 179, 65, 0.45);
   --text-on-accent: #211a08;
 
-  --base-transition: 120ms ease;
+  --base-transition: 150ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.22, 0.61, 0.36, 1);
   --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.25);
   --shadow-m: 0 6px 20px rgba(0, 0, 0, 0.28);
   --shadow-l: 0 18px 60px rgba(0, 0, 0, 0.45);
@@ -340,7 +342,7 @@ body.is-resizing * {
   gap: 2px;
   padding: 0 6px 0 8px;
   flex: 0 0 auto;
-  overflow: hidden;
+  overflow: visible;
   white-space: nowrap;
 }
 
@@ -1855,7 +1857,7 @@ body.is-resizing .sidebar-resizer::after {
   border-radius: var(--radius-m);
   background: var(--background-primary);
   box-shadow: var(--shadow-m);
-  animation: pop-in 110ms ease both;
+  animation: pop-in 150ms var(--ease-out) both;
 }
 
 .popover-left {
@@ -2029,7 +2031,7 @@ body.is-resizing .sidebar-resizer::after {
   padding: 24px;
   background: rgba(0, 0, 0, 0.44);
   backdrop-filter: blur(2px);
-  animation: fade-in 110ms ease both;
+  animation: fade-in 170ms ease-out both;
 }
 
 .modal {
@@ -2041,7 +2043,7 @@ body.is-resizing .sidebar-resizer::after {
   border-radius: var(--radius-l);
   background: var(--background-primary);
   box-shadow: var(--shadow-l);
-  animation: modal-in 130ms ease both;
+  animation: modal-in 190ms var(--ease-out) both;
   overflow: hidden;
 }
 
@@ -2201,6 +2203,108 @@ body.is-resizing .sidebar-resizer::after {
 
 .setting-toggle-row {
   border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.setting-control-row {
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: default;
+}
+
+.setting-control-row.is-disabled {
+  opacity: 0.55;
+}
+
+.setting-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.setting-select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 11px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: translateY(-2px) rotate(45deg);
+  pointer-events: none;
+  transition: border-color var(--base-transition);
+}
+
+.setting-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 190px;
+  height: 30px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--background-modifier-border-strong);
+  border-radius: var(--radius-s);
+  background: var(--background-tertiary);
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  transition: border-color var(--base-transition), background var(--base-transition),
+    box-shadow var(--base-transition);
+}
+
+.setting-select:hover {
+  border-color: var(--text-faint);
+}
+
+.setting-select:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-soft);
+}
+
+.setting-input {
+  width: 190px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--background-modifier-border-strong);
+  border-radius: var(--radius-s);
+  background: var(--background-tertiary);
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: 12.5px;
+  transition: border-color var(--base-transition), background var(--base-transition),
+    box-shadow var(--base-transition);
+}
+
+.setting-input::placeholder {
+  color: var(--text-faint);
+}
+
+.setting-input:hover {
+  border-color: var(--text-faint);
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-soft);
+}
+
+@media (max-width: 620px) {
+  .setting-control-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .setting-select,
+  .setting-input {
+    width: 100%;
+  }
+
+  .setting-select-wrap {
+    width: 100%;
+  }
 }
 
 .setting-copy {
@@ -2584,7 +2688,7 @@ input[type="range"] {
   padding: 12vh 24px 24px;
   background: rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(1.5px);
-  animation: fade-in 100ms ease both;
+  animation: fade-in 150ms ease-out both;
 }
 
 .palette {
@@ -2598,7 +2702,7 @@ input[type="range"] {
   border-radius: var(--radius-l);
   background: var(--background-primary);
   box-shadow: var(--shadow-l);
-  animation: palette-in 130ms ease both;
+  animation: palette-in 180ms var(--ease-out) both;
 }
 
 .palette.switcher {
@@ -2753,7 +2857,7 @@ input[type="range"] {
   border-radius: var(--radius-m);
   background: var(--background-primary);
   box-shadow: var(--shadow-m);
-  animation: pop-in 90ms ease both;
+  animation: pop-in 150ms var(--ease-out) both;
 }
 
 /* -------------------------------------------------------------- toasts -- */
@@ -2783,7 +2887,7 @@ input[type="range"] {
   color: var(--text-normal);
   font-size: 12px;
   pointer-events: auto;
-  animation: toast-in 150ms ease both;
+  animation: toast-in 200ms var(--ease-out) both;
 }
 
 .toast-icon {
@@ -3068,6 +3172,30 @@ input[type="range"] {
 
 /* ---------------------------------------------------------- animations -- */
 
+:is(.btn, .icon-button, .toolbar-button, .titlebar-button) {
+  transition: background var(--base-transition), color var(--base-transition),
+    border-color var(--base-transition), box-shadow var(--base-transition),
+    scale 110ms var(--ease-smooth);
+}
+
+:is(.btn, .icon-button, .toolbar-button, .titlebar-button):active:not(:disabled) {
+  scale: 0.95;
+}
+
+:focus-visible {
+  outline: 2px solid var(--interactive-accent-border);
+  outline-offset: 1px;
+}
+
+.theme-card {
+  transition: border-color var(--base-transition), background var(--base-transition),
+    box-shadow var(--base-transition), transform var(--base-transition);
+}
+
+.theme-card:hover {
+  transform: translateY(-1px);
+}
+
 .spin {
   animation: spin 900ms linear infinite;
 }
@@ -3147,6 +3275,17 @@ input[type="range"] {
   .right-sidebar {
     width: 256px;
     flex-basis: 256px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

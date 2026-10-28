@@ -15,11 +15,13 @@ import {
   uid,
 } from "./lib/utils";
 import { loadWorkspace, saveWorkspace } from "./lib/workspace";
+import { loadGraphGroups, saveGraphGroups } from "./lib/graphGroups";
 import type {
   ConfirmOptions,
   ContextMenuState,
   FileNode,
   GraphData,
+  GraphGroup,
   GraphScope,
   ImportKind,
   ImportResult,
@@ -48,6 +50,13 @@ export const defaultSettings: Settings = {
   spellcheck: false,
   confirmDelete: true,
   onboardingComplete: false,
+  defaultFileToOpen: "last",
+  defaultFile: "",
+  alwaysFocusNewTabs: true,
+  newNoteLocation: "current",
+  newNoteFolder: "",
+  attachmentLocation: "folder",
+  attachmentFolder: "attachments",
   lastVault: null,
   recentVaults: [],
   recentFiles: [],
@@ -82,6 +91,7 @@ interface AppState {
   graphFocusPath: string | null;
   graphScope: GraphScope;
   graphDepth: number;
+  graphGroups: GraphGroup[];
   savingCount: number;
   cursor: { line: number; col: number };
   searchQuery: string;
@@ -133,6 +143,9 @@ interface AppState {
   setGraphFocusPath: (path: string | null) => void;
   setGraphScope: (scope: GraphScope) => void;
   setGraphDepth: (depth: number) => void;
+  addGraphGroup: (group: GraphGroup) => void;
+  updateGraphGroup: (id: string, patch: Partial<Omit<GraphGroup, "id">>) => void;
+  removeGraphGroup: (id: string) => void;
   newTab: () => void;
   closeTab: (id: string) => Promise<void>;
   activateTab: (id: string) => void;
@@ -270,6 +283,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   graphFocusPath: null,
   graphScope: "global",
   graphDepth: 2,
+  graphGroups: [],
   savingCount: 0,
   cursor: { line: 1, col: 1 },
   searchQuery: "",
@@ -356,14 +370,46 @@ export const useAppStore = create<AppState>((set, get) => ({
           for (const folder of ancestorsOf(vault.path, tab.path)) expanded[folder] = true;
         }
       }
+
+      // Startup preference: last workspace, a blank tab, or a specific note.
+      const mergedSettings: Settings = { ...defaultSettings, ...settings };
+      let startTabs = tabs;
+      let activeTab = active;
+      const startup = mergedSettings.defaultFileToOpen;
+      if (startup === "new") {
+        const blank = emptyTab();
+        startTabs = [...tabs, blank];
+        activeTab = blank;
+      } else if (startup === "specific" && mergedSettings.defaultFile.trim()) {
+        const wanted = mergedSettings.defaultFile.trim();
+        const insideVault =
+          wanted === vault.path ||
+          wanted.startsWith(`${vault.path}/`) ||
+          wanted.startsWith(`${vault.path}\\`);
+        const existing = startTabs.find((t) => t.path === wanted);
+        if (existing) {
+          activeTab = existing;
+        } else if (insideVault && (await api.fileExists(wanted))) {
+          try {
+            const content = await api.readFile(wanted);
+            const tab = noteTab(wanted, content, "edit");
+            startTabs = [...startTabs, tab];
+            activeTab = tab;
+            for (const folder of ancestorsOf(vault.path, wanted)) expanded[folder] = true;
+          } catch {
+            /* fall back to the restored workspace */
+          }
+        }
+      }
+
       const restoredView: SidebarView = ws.sidebarView === "search" ? "search" : "files";
       set({
         vault,
-        settings: { ...defaultSettings, ...settings },
+        settings: mergedSettings,
         tree,
-        tabs,
-        activeTabId: active.id,
-        selectedPath: active.path ?? null,
+        tabs: startTabs,
+        activeTabId: activeTab.id,
+        selectedPath: activeTab.path ?? null,
         sidebarView: restoredView,
         sidebarOpen: ws.sidebarOpen,
         sidebarWidth: Math.min(480, Math.max(200, ws.sidebarWidth || 280)),
@@ -376,6 +422,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         searchLoading: false,
         graphFocusPath: null,
         graphScope: "global",
+        graphGroups: loadGraphGroups(vault.path),
         initializing: false,
         ready: true,
         graph: null,
@@ -448,6 +495,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       graph: null,
       graphFocusPath: null,
       graphScope: "global",
+      graphGroups: [],
       searchQuery: "",
       searchResults: [],
       searchLoading: false,
@@ -637,7 +685,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     if (!state.vault) return;
     const active = activeTabOf(state.tabs, state.activeTabId);
-    const targetDir = parent ?? (active?.path ? dirname(active.path) : state.vault.path);
+    let targetDir = parent;
+    if (!targetDir) {
+      if (state.settings.newNoteLocation === "root") {
+        targetDir = state.vault.path;
+      } else if (state.settings.newNoteLocation === "folder") {
+        const folder = state.settings.newNoteFolder.trim().replace(/^\/+|\/+$/g, "");
+        targetDir = folder
+          ? await api.ensureVaultFolder(state.vault.path, folder).catch(() => state.vault!.path)
+          : state.vault.path;
+      } else {
+        targetDir = active?.path ? dirname(active.path) : state.vault.path;
+      }
+    }
     try {
       const path = await api.createNote(targetDir, "Untitled");
       for (const folder of ancestorsOf(state.vault.path, path)) {
@@ -656,7 +716,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     if (!state.vault) return null;
     const active = activeTabOf(state.tabs, state.activeTabId);
-    const targetDir = parent ?? (active?.path ? dirname(active.path) : state.vault.path);
+    let targetDir = parent;
+    if (!targetDir) {
+      if (state.settings.newNoteLocation === "root") {
+        targetDir = state.vault.path;
+      } else if (state.settings.newNoteLocation === "folder") {
+        const folder = state.settings.newNoteFolder.trim().replace(/^\/+|\/+$/g, "");
+        targetDir = folder
+          ? await api.ensureVaultFolder(state.vault.path, folder).catch(() => state.vault!.path)
+          : state.vault.path;
+      } else {
+        targetDir = active?.path ? dirname(active.path) : state.vault.path;
+      }
+    }
     try {
       const path = await api.createNote(targetDir, name);
       for (const folder of ancestorsOf(state.vault.path, path)) {
@@ -833,10 +905,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       tabId = replaced.id;
     } else {
       const tab = noteTab(path, content, opts.mode ?? "edit");
+      const focusNew = !opts.newTab || get().settings.alwaysFocusNewTabs;
       set((s) => ({
         tabs: [...s.tabs, tab],
-        activeTabId: tab.id,
-        selectedPath: path,
+        activeTabId: focusNew ? tab.id : s.activeTabId,
+        selectedPath: focusNew ? path : s.selectedPath,
       }));
       tabId = tab.id;
     }
@@ -909,6 +982,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setGraphDepth(depth) {
     set({ graphDepth: Math.min(4, Math.max(1, depth)) });
+  },
+
+  addGraphGroup(group) {
+    const vault = get().vault;
+    if (!vault) return;
+    const groups = [...get().graphGroups, group];
+    set({ graphGroups: groups });
+    saveGraphGroups(vault.path, groups);
+  },
+
+  updateGraphGroup(id, patch) {
+    const vault = get().vault;
+    const groups = get().graphGroups.map((group) =>
+      group.id === id ? { ...group, ...patch, id: group.id } : group,
+    );
+    set({ graphGroups: groups });
+    if (vault) saveGraphGroups(vault.path, groups);
+  },
+
+  removeGraphGroup(id) {
+    const vault = get().vault;
+    const groups = get().graphGroups.filter((group) => group.id !== id);
+    set({ graphGroups: groups });
+    if (vault) saveGraphGroups(vault.path, groups);
   },
 
   newTab() {

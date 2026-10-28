@@ -56,7 +56,7 @@ export const resolveRef = (vaultRoot: string, fromPath: string, ref: string) => 
   if (!clean || /^[a-z]+:\/\//i.test(clean) || clean.startsWith("mailto:")) {
     return null;
   }
-  clean = clean.split("#")[0].split("?")[0];
+  clean = clean.split("|")[0].split("#")[0].split("?")[0];
   if (!clean) return null;
   if (clean.startsWith("/")) {
     return joinPath(vaultRoot, normalizePath(clean.slice(1)));

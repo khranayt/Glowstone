@@ -22,7 +22,14 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import type { Tab, Settings } from "../types";
 import { glowstoneEditorTheme, markdownHighlighting } from "./theme";
 import { livePreview } from "./livePreview";
-import { markdownKeymap, setActiveEditor } from "./commands";
+import { insertAttachment, markdownKeymap, setActiveEditor } from "./commands";
+import { useAppStore } from "../store";
+import { api } from "../lib/api";
+import {
+  attachmentFolderFor,
+  attachmentMarkdown,
+  fileToBase64,
+} from "../lib/attachments";
 
 interface EditorProps {
   tab: Tab;
@@ -73,6 +80,33 @@ export function Editor({
     });
   };
 
+  const importImages = async (files: File[]) => {
+    const state = useAppStore.getState();
+    if (!state.vault) return;
+    const active = state.tabs.find((item) => item.id === state.activeTabId);
+    if (!active || active.kind !== "note" || !active.path) {
+      state.toast("Open a note before adding an image", "error");
+      return;
+    }
+    const folder = attachmentFolderFor(state.vault.path, active.path, state.settings);
+    for (const file of files) {
+      try {
+        const data = await fileToBase64(file);
+        const fallbackName = `image-${Date.now()}.png`;
+        const saved = await api.saveAttachment(
+          state.vault.path,
+          folder,
+          file.name || fallbackName,
+          data,
+        );
+        insertAttachment(attachmentMarkdown(state.vault.path, active.path, saved, file.name));
+      } catch (error) {
+        state.toast(`Could not add image: ${String(error)}`, "error");
+      }
+    }
+    await state.refreshTree();
+  };
+
   const createState = (content: string) => {
     const current = propsRef.current.settings;
     return EditorState.create({
@@ -103,6 +137,24 @@ export function Editor({
           resolveImage: (reference) => propsRef.current.resolveImage(reference),
         })),
         EditorView.domEventHandlers({
+          paste: (event) => {
+            const files = Array.from(event.clipboardData?.files ?? []).filter(
+              (file) => file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(file.name),
+            );
+            if (files.length === 0) return false;
+            event.preventDefault();
+            void importImages(files);
+            return true;
+          },
+          drop: (event) => {
+            const files = Array.from(event.dataTransfer?.files ?? []).filter(
+              (file) => file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(file.name),
+            );
+            if (files.length === 0) return false;
+            event.preventDefault();
+            void importImages(files);
+            return true;
+          },
           mousedown: (event, view) => {
             if (!(event.ctrlKey || event.metaKey)) return false;
             const target = event.target as HTMLElement | null;

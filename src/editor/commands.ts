@@ -126,7 +126,22 @@ const taskList = () =>
 
 const quote = () => applyBlockPrefix(() => "> ", (text) => /^>\s?/.test(text));
 
-const paragraph = () => applyBlockPrefix(() => "");
+const paragraph = () =>
+  withView((view) => {
+    const { from, to } = view.state.selection.main;
+    const start = view.state.doc.lineAt(from).number;
+    const end = view.state.doc.lineAt(to).number;
+    const changes: ChangeSpec[] = [];
+    for (let number = start; number <= end; number += 1) {
+      const line = view.state.doc.line(number);
+      const stripped = stripBlockPrefix(line.text);
+      if (stripped !== line.text) {
+        changes.push({ from: line.from, to: line.to, insert: stripped });
+      }
+    }
+    if (changes.length === 0) return;
+    view.dispatch({ changes, scrollIntoView: true });
+  });
 
 const tableCell = (cell: string) => cell.replace(/\|/g, "\\|").trim();
 
@@ -179,6 +194,23 @@ export const insertTable = (rowCount: number, columnCount: number) =>
       scrollIntoView: true,
     });
   });
+
+/** Insert a standalone block (such as an image) on its own line. */
+export const insertBlock = (block: string) =>
+  withView((view) => {
+    const { from, to } = view.state.selection.main;
+    const doc = view.state.doc;
+    const before = from > 0 && doc.sliceString(from - 1, from) !== "\n" ? "\n" : "";
+    const after = to < doc.length && doc.sliceString(to, to + 1) !== "\n" ? "\n" : "";
+    const insertion = `${before}${block}${after}`;
+    view.dispatch({
+      changes: { from, to, insert: insertion },
+      selection: { anchor: from + before.length + block.length },
+      scrollIntoView: true,
+    });
+  });
+
+export const insertAttachment = (markdown: string) => insertBlock(markdown);
 
 const formatTable = () =>
   withView((view) => {

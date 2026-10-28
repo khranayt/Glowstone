@@ -40,7 +40,7 @@ export function TitleBar() {
   const refreshTree = useAppStore((s) => s.refreshTree);
   const refreshGraph = useAppStore((s) => s.refreshGraph);
 
-  const leftWidth = sidebarOpen ? 48 + sidebarWidth : 48;
+  const leftWidth = sidebarOpen ? Math.max(148, 48 + sidebarWidth) : 148;
 
   return (
     <header className="titlebar" data-tauri-drag-region>

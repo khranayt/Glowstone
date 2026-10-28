@@ -2,9 +2,10 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/common";
 import type { Tokens } from "marked";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { attachmentUrl, findAttachmentPath } from "./attachments";
-import { isExternalUrl, isMarkdownPath } from "./utils";
+import { openUrl, openPath } from "@tauri-apps/plugin-opener";
+import { attachmentUrl, findAttachmentPath, splitReferenceSize } from "./attachments";
+import { flattenAllFiles, isExternalUrl, isMarkdownPath } from "./utils";
+import { isTauri } from "./api";
 import { calloutSvg } from "./calloutIcons";
 import type { FileNode } from "../types";
 
@@ -112,10 +113,69 @@ const highlightExtension = {
   },
 };
 
+const looseImageExtension = {
+  name: "glowstoneLooseImage",
+  level: "inline" as const,
+  start(src: string) {
+    const index = src.indexOf("![");
+    return index >= 0 ? index : undefined;
+  },
+  tokenizer(src: string) {
+    const head = /^!\[([^\]\n]*)\]\(/.exec(src);
+    if (!head) return undefined;
+    const start = head[0].length;
+    // Already a valid `<...>` destination; let the built-in rule handle it.
+    if (src[start] === "<") return undefined;
+    let depth = 0;
+    let index = start;
+    for (; index < src.length && src[index] !== "\n"; index += 1) {
+      const char = src[index];
+      if (char === "\\") {
+        index += 1;
+        continue;
+      }
+      if (char === "(") depth += 1;
+      else if (char === ")") {
+        if (depth === 0) break;
+        depth -= 1;
+      }
+    }
+    if (src[index] !== ")") return undefined;
+    const rawDestination = src.slice(start, index).trim();
+    if (!rawDestination) return undefined;
+    const quoted = /^(.*?)(?:\s+"([^"]*)"|\s+'([^']*)')$/s.exec(rawDestination);
+    const target = (quoted ? quoted[1] : rawDestination).trim();
+    if (!target) return undefined;
+    // Ordinary destinations belong to the built-in image rule.
+    if (!/[\s()<>]/.test(target)) return undefined;
+    return {
+      type: "glowstoneLooseImage",
+      raw: src.slice(0, index + 1),
+      text: head[1],
+      href: target,
+      title: quoted ? quoted[2] ?? quoted[3] : undefined,
+    };
+  },
+  renderer(this: unknown, token: Tokens.Generic) {
+    const title = token.title
+      ? ` title="${escapeAttr(String(token.title))}"`
+      : "";
+    return `<img src="${escapeAttr(String(token.href))}" alt="${escapeAttr(
+      String(token.text),
+    )}"${title}>`;
+  },
+};
+
 marked.use({
   gfm: true,
   breaks: true,
-  extensions: [embedExtension, wikilinkExtension, tagExtension, highlightExtension],
+  extensions: [
+    looseImageExtension,
+    embedExtension,
+    wikilinkExtension,
+    tagExtension,
+    highlightExtension,
+  ],
 });
 
 export const renderMarkdown = (content: string): string => {
@@ -143,6 +203,31 @@ export const decorateMarkdown = (
   options: DecorateOptions,
 ) => {
   const { vaultRoot, notePath, tree, onOpenNote, onExternal } = options;
+
+  const resolveAttachment = (target: string) => {
+    const path = findAttachmentPath(vaultRoot, notePath, target, tree);
+    // findAttachmentPath falls back to a computed path for images that are not
+    // indexed yet. For clicks, only open files that really exist in the vault.
+    if (!path || !flattenAllFiles(tree).some((file) => file.path === path)) return null;
+    return path;
+  };
+
+  const openAttachment = (target: string) => {
+    const path = resolveAttachment(target);
+    if (!path) return false;
+    if (isTauri()) {
+      void openPath(path).catch(() => {
+        void attachmentUrl(vaultRoot, notePath, target, tree).then((url) => {
+          if (url) window.open(url, "_blank");
+        });
+      });
+    } else {
+      void attachmentUrl(vaultRoot, notePath, target, tree).then((url) => {
+        if (url) window.open(url, "_blank");
+      });
+    }
+    return true;
+  };
 
   // Code blocks ------------------------------------------------------------
   container.querySelectorAll("pre").forEach((pre) => {
@@ -286,11 +371,13 @@ export const decorateMarkdown = (
   };
 
   container.querySelectorAll<HTMLElement>(".md-image-embed").forEach((embed) => {
-    const reference = embed.dataset.src ?? "";
+    const { reference, width, height } = splitReferenceSize(embed.dataset.src ?? "");
     const image = document.createElement("img");
     image.className = "md-embedded-image";
     image.alt = reference;
     image.draggable = false;
+    if (width) image.style.width = `${width}px`;
+    if (height) image.style.height = `${height}px`;
     embed.textContent = "";
     embed.append(image);
     hydrateImage(image, reference);
@@ -313,7 +400,10 @@ export const decorateMarkdown = (
     if (anchor.classList.contains("internal-link")) {
       anchor.addEventListener("click", (event) => {
         event.preventDefault();
-        onOpenNote(anchor.dataset.href ?? "");
+        const target = anchor.dataset.href ?? "";
+        const clean = target.split("|")[0].split("#")[0].trim();
+        if (clean && !isMarkdownPath(clean) && openAttachment(target)) return;
+        onOpenNote(target);
       });
       return;
     }
@@ -354,13 +444,11 @@ export const decorateMarkdown = (
       });
       return;
     }
-    const attachment = findAttachmentPath(vaultRoot, notePath, href, tree);
+    const attachment = resolveAttachment(href);
     if (attachment) {
       anchor.addEventListener("click", (event) => {
         event.preventDefault();
-        void attachmentUrl(vaultRoot, notePath, href, tree).then((url) => {
-          if (url) window.open(url, "_blank");
-        });
+        openAttachment(href);
       });
     }
   });

@@ -28,6 +28,7 @@ import { api } from "../lib/api";
 import {
   attachmentFolderFor,
   attachmentMarkdown,
+  attachmentNameFor,
   fileToBase64,
 } from "../lib/attachments";
 
@@ -92,14 +93,15 @@ export function Editor({
     for (const file of files) {
       try {
         const data = await fileToBase64(file);
-        const fallbackName = `image-${Date.now()}.png`;
+        const name = attachmentNameFor(file);
         const saved = await api.saveAttachment(
           state.vault.path,
           folder,
-          file.name || fallbackName,
+          name,
           data,
         );
-        insertAttachment(attachmentMarkdown(state.vault.path, active.path, saved, file.name));
+        insertAttachment(attachmentMarkdown(state.vault.path, active.path, saved, name));
+        state.expandToPath(saved);
       } catch (error) {
         state.toast(`Could not add image: ${String(error)}`, "error");
       }

@@ -8,6 +8,7 @@ import {
 } from "@codemirror/view";
 import { StateField, type EditorState, type Range } from "@codemirror/state";
 import { calloutKind, calloutSvg } from "../lib/calloutIcons";
+import { splitReferenceSize } from "../lib/attachments";
 
 export interface LivePreviewOptions {
   resolveImage: (reference: string) => Promise<string | null>;
@@ -65,12 +66,18 @@ class ImageWidget extends WidgetType {
     readonly reference: string,
     readonly alt: string,
     readonly resolve: (reference: string) => Promise<string | null>,
+    readonly width?: number,
+    readonly height?: number,
   ) {
     super();
   }
 
   eq(other: ImageWidget) {
-    return other.reference === this.reference;
+    return (
+      other.reference === this.reference &&
+      other.width === this.width &&
+      other.height === this.height
+    );
   }
 
   toDOM() {
@@ -79,6 +86,8 @@ class ImageWidget extends WidgetType {
     const image = document.createElement("img");
     image.alt = this.alt || this.reference;
     image.draggable = false;
+    if (this.width) image.style.width = `${this.width}px`;
+    if (this.height) image.style.height = `${this.height}px`;
     wrap.append(image);
     void this.resolve(this.reference).then((url) => {
       if (url) image.src = url;
@@ -144,6 +153,61 @@ const splitTableCells = (line: string): string[] => {
 };
 
 const isTableText = (text: string) => /^\s*\|.*\|\s*$/.test(text);
+
+/** Parse a line that contains only an image (Markdown or wiki syntax). */
+const parseStandaloneImage = (
+  text: string,
+): { reference: string; alt: string } | null => {
+  const value = text.trim();
+  if (!value.startsWith("!")) return null;
+
+  if (value.startsWith("![[")) {
+    const match = /^!\[\[([^\]\n]+?)\]\]$/.exec(value);
+    return match ? { reference: match[1], alt: "" } : null;
+  }
+
+  const head = /^!\[([^\]\n]*)\]\(/.exec(value);
+  if (!head) return null;
+
+  let index = head[0].length;
+  let reference = "";
+  if (value[index] === "<") {
+    const close = value.indexOf(">", index + 1);
+    if (close < 0) return null;
+    reference = value.slice(index + 1, close);
+    index = close + 1;
+  } else {
+    let depth = 0;
+    const start = index;
+    for (; index < value.length; index += 1) {
+      const char = value[index];
+      if (char === "\\") {
+        index += 1;
+        continue;
+      }
+      if (char === "(") depth += 1;
+      else if (char === ")") {
+        if (depth === 0) break;
+        depth -= 1;
+      }
+    }
+    if (index >= value.length) return null;
+    reference = value.slice(start, index);
+  }
+
+  const rest = value.slice(index).trim();
+  if (rest.startsWith(")")) {
+    if (rest.slice(1).trim()) return null;
+  } else if (!/^(?:"[^"]*"|'[^']*')\s*\)\s*$/.test(rest)) {
+    return null;
+  }
+
+  const quoted = /^(.*?)(?:\s+"([^"]*)"|\s+'([^']*)')$/s.exec(reference);
+  return {
+    reference: (quoted ? quoted[1] : reference).trim(),
+    alt: head[1],
+  };
+};
 
 const isDelimiterRow = (cells: string[]) =>
   cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s+/g, "")));
@@ -425,22 +489,6 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
         continue;
       }
 
-      // Standalone images are rendered as actual images.
-      const imageMatch = /^\s*(?:(!\[\[([^\]\n]+?)\]\]|!\[([^\]]*)\]\(([^)\n]+)\)))\s*$/.exec(text);
-      if (imageMatch) {
-        const reference = imageMatch[2] ?? imageMatch[4] ?? "";
-        const alt = imageMatch[3] || reference;
-        if (!active) {
-          ranges.push(
-            Decoration.replace({
-              widget: new ImageWidget(reference, alt, options.resolveImage),
-            }).range(line.from, line.to),
-          );
-          position = line.to + 1;
-          continue;
-        }
-      }
-
       const headingMatch = /^(#{1,6})([ \t]+)/.exec(text);
       if (headingMatch) {
         ranges.push(headingLine[headingMatch[1].length - 1].range(line.from));
@@ -512,6 +560,23 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
         ranges.push(listLine.range(line.from));
       }
 
+      // Standalone images (optionally inside a list item or quote) render as
+      // actual images. The list marker and quote chrome stay intact.
+      const imagePrefix =
+        /^(\s*(?:(?:>[ \t]?)+)?(?:(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)?)/.exec(text)?.[1] ?? "";
+      const image = parseStandaloneImage(text.slice(imagePrefix.length));
+      if (image && !active) {
+        const { reference, width, height } = splitReferenceSize(image.reference);
+        const alt = image.alt || reference;
+        ranges.push(
+          Decoration.replace({
+            widget: new ImageWidget(reference, alt, options.resolveImage, width, height),
+          }).range(line.from + imagePrefix.length, line.to),
+        );
+        position = line.to + 1;
+        continue;
+      }
+
       if (/^\s{0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$/.test(text)) {
         if (!active) {
           ranges.push(
@@ -576,7 +641,7 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
       });
 
       // Media / attachments referenced with markdown image syntax.
-      collect(/!\[([^\]\n]*)\]\(([^)\n]+)\)/g, (match) => {
+      collect(/!\[([^\]\n]*)\]\(\s*(?:<([^>\n]+)>|([^)\n]+?))(?:\s+["'][^"']*["'])?\s*\)/g, (match) => {
         if (!match[1]) return null;
         return inlinePiece(
           base,
@@ -584,7 +649,7 @@ const build = (view: EditorView, options: LivePreviewOptions): DecorationSet => 
           "cm-embed",
           match.index + 2,
           match.index + 2 + match[1].length,
-          { "data-embed": match[2] },
+          { "data-embed": match[2] ?? match[3] ?? "" },
         );
       });
 

@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import { api } from "./lib/api";
 import {
   activeTabOf,
   basename,
   dirname,
   findNoteByLink,
+  flattenAllFiles,
   flattenNotes,
   fuzzyFilter,
   joinPath,
@@ -16,6 +18,7 @@ import {
 } from "./lib/utils";
 import { loadWorkspace, saveWorkspace } from "./lib/workspace";
 import { loadGraphGroups, saveGraphGroups } from "./lib/graphGroups";
+import { findAttachmentPath, looksLikeAttachment } from "./lib/attachments";
 import type {
   ConfirmOptions,
   ContextMenuState,
@@ -1150,6 +1153,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     const clean = target.split("|")[0].split("#")[0].trim();
     if (!clean) return;
+    // Links to images, PDFs and other attachments should open the real file
+    // instead of silently creating an empty note with the same name.
+    const attachment = findAttachmentPath(
+      state.vault.path,
+      fromPath ?? "",
+      clean,
+      state.tree,
+    );
+    const exists =
+      attachment != null &&
+      flattenAllFiles(state.tree).some((file) => file.path === attachment);
+    if (attachment && exists) {
+      try {
+        await openLocalPath(attachment);
+      } catch (error) {
+        get().toast(`Could not open attachment: ${String(error)}`, "error");
+      }
+      return;
+    }
+    if (looksLikeAttachment(clean)) {
+      get().toast(`Attachment not found: ${clean}`, "error");
+      return;
+    }
     const parent = fromPath ? dirname(fromPath) : state.vault.path;
     try {
       const path = await api.createNote(parent, clean.split("/").pop() || "Untitled");

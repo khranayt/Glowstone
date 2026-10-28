@@ -33,8 +33,8 @@ export const api = {
     invoke<string>("move_entry", { path, targetDir }),
   deleteEntry: (path: string) => invoke<void>("delete_entry", { path }),
   fileExists: (path: string) => invoke<boolean>("file_exists", { path }),
-  readAttachment: (path: string) =>
-    invoke<string>("read_attachment", { path }),
+  readAttachment: (vault: string, path: string) =>
+    invoke<string>("read_attachment", { vault, path }),
   ensureVaultFolder: (vault: string, folder: string) =>
     invoke<string>("ensure_vault_folder", { vault, folder }),
   saveAttachment: (vault: string, folder: string, name: string, data: string) =>

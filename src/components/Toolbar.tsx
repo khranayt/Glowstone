@@ -137,6 +137,7 @@ export function EditorToolbar() {
           insertAttachment(
             attachmentMarkdown(state.vault.path, active.path, saved, basename(source)),
           );
+          state.expandToPath(saved);
         } catch (error) {
           state.toast(`Could not add image: ${String(error)}`, "error");
         }

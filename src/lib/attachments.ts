@@ -13,12 +13,21 @@ import type { FileNode, Settings } from "../types";
 
 const cache = new Map<string, string>();
 const pending = new Map<string, Promise<string | null>>();
+const treeFileCache = new WeakMap<FileNode[], FileNode[]>();
 
-export const loadAttachment = (path: string): Promise<string | null> => {
+const filesOf = (tree: FileNode[]): FileNode[] => {
+  const cached = treeFileCache.get(tree);
+  if (cached) return cached;
+  const files = flattenAllFiles(tree);
+  treeFileCache.set(tree, files);
+  return files;
+};
+
+export const loadAttachment = (path: string, vaultRoot: string): Promise<string | null> => {
   if (cache.has(path)) return Promise.resolve(cache.get(path)!);
   if (pending.has(path)) return pending.get(path)!;
   const promise = api
-    .readAttachment(path)
+    .readAttachment(vaultRoot, path)
     .then((url) => {
       cache.set(path, url);
       pending.delete(path);
@@ -55,10 +64,27 @@ export const findAttachmentPath = (
   tree: FileNode[],
 ): string | null => {
   const direct = resolveRef(vaultRoot, notePath, reference);
-  const files = flattenAllFiles(tree);
+  const files = filesOf(tree);
   if (direct) {
     const exact = files.find((f) => f.path === direct);
     if (exact) return exact.path;
+  }
+  // A literal file name may itself contain `#` or `?`; try it before treating
+  // those characters as fragment/query syntax.
+  const decoded = (() => {
+    const trimmed = reference.trim().replace(/^<|>$/g, "");
+    try {
+      return decodeURIComponent(trimmed);
+    } catch {
+      return trimmed;
+    }
+  })();
+  const rawName = basename(decoded);
+  if (rawName) {
+    const byRawName = files.find(
+      (f) => f.name.toLowerCase() === rawName.toLowerCase(),
+    );
+    if (byRawName) return byRawName.path;
   }
   const clean = cleanReference(reference);
   const name = basename(clean);
@@ -82,7 +108,7 @@ export const attachmentUrl = async (
   if (reference.startsWith("data:")) return reference;
   const path = findAttachmentPath(vaultRoot, notePath, reference, tree);
   if (!path) return null;
-  return loadAttachment(path);
+  return loadAttachment(path, vaultRoot);
 };
 
 /** Vault-relative folder where new attachments for this note should live. */
@@ -144,4 +170,72 @@ export const fileToBase64 = async (file: File): Promise<string> => {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
   }
   return btoa(binary);
+};
+
+const IMAGE_EXTENSIONS = /^(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i;
+
+const MIME_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "image/avif": "avif",
+  "image/bmp": "bmp",
+  "image/x-icon": "ico",
+  "image/vnd.microsoft.icon": "ico",
+};
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+/**
+ * A safe, descriptive file name for a pasted or dropped image. Clipboard
+ * images often arrive as "blob" or without any extension, which makes them
+ * impossible to recognise later, so infer one from the MIME type.
+ */
+export const attachmentNameFor = (file: File): string => {
+  const raw = (file.name ?? "").trim();
+  const match = /\.([a-z0-9]{1,8})$/i.exec(raw);
+  const extension = match?.[1] ?? "";
+  const base = extension ? raw.slice(0, -(extension.length + 1)).trim() : raw;
+  const mimeExtension = MIME_EXTENSIONS[(file.type || "").toLowerCase()];
+  if (extension && IMAGE_EXTENSIONS.test(extension) && base) return raw;
+
+  const finalExtension = mimeExtension ?? (extension || "png");
+  if (base && base.toLowerCase() !== "blob" && base.toLowerCase() !== "image") {
+    return `${base}.${finalExtension}`;
+  }
+
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(
+    now.getHours(),
+  )}.${pad(now.getMinutes())}.${pad(now.getSeconds())}`;
+  return `Pasted image ${stamp}.${finalExtension}`;
+};
+
+export interface SizedReference {
+  reference: string;
+  width?: number;
+  height?: number;
+}
+
+const ATTACHMENT_EXTENSIONS =
+  /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|pdf|mp3|wav|ogg|m4a|flac|mp4|webm|mov|mkv|zip|7z|rar|txt|csv|docx?|xlsx?|pptx?|epub)$/i;
+
+/** Whether a link looks like a file in the vault rather than a note. */
+export const looksLikeAttachment = (reference: string) => {
+  const clean = reference.split("|")[0].split("#")[0].split("?")[0].trim();
+  return ATTACHMENT_EXTENSIONS.test(clean);
+};
+
+/** Split Obsidian's `|300` / `|300x200` display size from an embed target. */
+export const splitReferenceSize = (value: string): SizedReference => {
+  const match = /\|(\d+)(?:x(\d+))?\s*$/.exec(value);
+  if (!match) return { reference: value };
+  return {
+    reference: value.slice(0, match.index),
+    width: Number(match[1]) || undefined,
+    height: match[2] ? Number(match[2]) || undefined : undefined,
+  };
 };

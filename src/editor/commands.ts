@@ -201,11 +201,14 @@ export const insertBlock = (block: string) =>
     const { from, to } = view.state.selection.main;
     const doc = view.state.doc;
     const before = from > 0 && doc.sliceString(from - 1, from) !== "\n" ? "\n" : "";
-    const after = to < doc.length && doc.sliceString(to, to + 1) !== "\n" ? "\n" : "";
-    const insertion = `${before}${block}${after}`;
+    // Live preview hides the active line's Markdown, so land the cursor on the
+    // line after the block. Otherwise a freshly added image would show its raw
+    // `![](...)` source until the user clicks elsewhere.
+    const hasNewline = to < doc.length && doc.sliceString(to, to + 1) === "\n";
+    const insertion = `${before}${block}${hasNewline ? "" : "\n"}`;
     view.dispatch({
       changes: { from, to, insert: insertion },
-      selection: { anchor: from + before.length + block.length },
+      selection: { anchor: from + before.length + block.length + 1 },
       scrollIntoView: true,
     });
   });

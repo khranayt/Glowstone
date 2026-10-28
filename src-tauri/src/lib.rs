@@ -152,9 +152,13 @@ fn vault_name(path: &Path) -> String {
 }
 
 fn sanitize_name(name: &str) -> String {
-    let re = Regex::new(r#"[\\/:*?"<>|]"#).unwrap();
-    let cleaned = re.replace_all(name.trim(), "").trim().to_string();
-    if cleaned.is_empty() {
+    let re = Regex::new(r#"[\\/:*?"<>|\x00-\x1f]"#).unwrap();
+    let cleaned = re
+        .replace_all(name.trim(), "")
+        .trim()
+        .trim_matches(['.', ' '])
+        .to_string();
+    if cleaned.is_empty() || cleaned == "." || cleaned == ".." {
         "Untitled".to_string()
     } else {
         cleaned
@@ -465,17 +469,53 @@ fn file_exists(path: String) -> bool {
     Path::new(&path).exists()
 }
 
+fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if bytes.starts_with(b"BM") {
+        Some("image/bmp")
+    } else if bytes.starts_with(&[0x00, 0x00, 0x01, 0x00]) {
+        Some("image/x-icon")
+    } else if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" && (&bytes[8..12] == b"avif" || &bytes[8..12] == b"avis") {
+        Some("image/avif")
+    } else {
+        let head = &bytes[..bytes.len().min(256)];
+        let text = String::from_utf8_lossy(head).trim_start().to_lowercase();
+        if text.starts_with("<svg") || (text.starts_with("<?xml") && text.contains("<svg")) {
+            Some("image/svg+xml")
+        } else {
+            None
+        }
+    }
+}
+
 #[tauri::command]
-fn read_attachment(path: String) -> Result<String, String> {
-    let p = PathBuf::from(&path);
+fn read_attachment(vault: String, path: String) -> Result<String, String> {
+    let root = fs::canonicalize(&vault).map_err(|_| "Vault folder does not exist".to_string())?;
+    let p = fs::canonicalize(&path).map_err(|_| "File not found".to_string())?;
+    if !p.starts_with(&root) {
+        return Err("Attachment must stay inside the vault".into());
+    }
     let meta = fs::metadata(&p).map_err(|_| "File not found".to_string())?;
     if meta.len() > 40 * 1024 * 1024 {
         return Err("File is too large".into());
     }
     let bytes = fs::read(&p).map_err(|e| e.to_string())?;
-    let mime = mime_guess::from_path(&p)
+    let mut mime = mime_guess::from_path(&p)
         .first_or_octet_stream()
         .to_string();
+    // Clipboard images saved without a useful extension still need to display.
+    if mime == "application/octet-stream" || mime == "text/plain" {
+        if let Some(sniffed) = sniff_image_mime(&bytes) {
+            mime = sniffed.to_string();
+        }
+    }
     Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
 }
 
@@ -1561,8 +1601,38 @@ mod tests {
         assert_ne!(saved, again);
         assert_eq!(fs::read(&saved).unwrap(), vec![0, 1, 2, 3]);
 
+        // Names that would escape the folder or hide the file are neutralised.
+        let neutral = save_attachment(
+            vault.to_string_lossy().to_string(),
+            "notes/assets".into(),
+            "..".into(),
+            BASE64.encode([5u8]),
+        )
+        .unwrap();
+        assert_eq!(Path::new(&neutral).parent().unwrap(), Path::new(&folder));
+        assert_eq!(Path::new(&neutral).file_name().unwrap(), "Untitled");
+
+        // Files saved without an extension still report their real image type.
+        let unknown = vault.join("blob");
+        fs::write(
+            &unknown,
+            [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0],
+        )
+        .unwrap();
+        let data = read_attachment(
+            vault.to_string_lossy().to_string(),
+            unknown.to_string_lossy().to_string(),
+        )
+        .unwrap();
+        assert!(data.starts_with("data:image/png;base64,"));
+
         let source = root.join("external.png");
         fs::write(&source, [7u8, 7]).unwrap();
+        assert!(read_attachment(
+            vault.to_string_lossy().to_string(),
+            source.to_string_lossy().to_string(),
+        )
+        .is_err());
         let copied = copy_attachment(
             vault.to_string_lossy().to_string(),
             "".into(),

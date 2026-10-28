@@ -83,6 +83,8 @@ npm run tauri build -- --bundles nsis
 | `F2` | Rename selected note |
 | `Alt+←` / `Alt+→` | Navigate note history |
 
+
+
 ## Repository layout
 
 ```

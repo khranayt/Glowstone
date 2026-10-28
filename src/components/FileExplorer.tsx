@@ -8,7 +8,6 @@ import {
   Image as ImageIcon,
   SquarePen,
   FolderPlus,
-  RefreshCw,
 } from "lucide-react";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useAppStore } from "../store";
@@ -313,19 +312,6 @@ export function FileExplorer() {
             </button>
           </div>
         )}
-      </div>
-      <div className="tree-footer">
-        <button className="tree-footer-button" onClick={() => void createNote()} title="New note">
-          <SquarePen size={14} />
-          New note
-        </button>
-        <button className="tree-footer-button" onClick={() => void createFolder()} title="New folder">
-          <FolderPlus size={14} />
-          New folder
-        </button>
-        <button className="tree-footer-button" onClick={() => void refreshTree()} title="Refresh">
-          <RefreshCw size={14} />
-        </button>
       </div>
     </div>
   );

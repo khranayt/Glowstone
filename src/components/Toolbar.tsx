@@ -20,7 +20,6 @@ import {
   Underline,
   Undo2,
   Highlighter,
-  Pilcrow,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -171,9 +170,6 @@ export function EditorToolbar() {
       </div>
       <div className="toolbar-separator" />
       <div className="toolbar-group">
-        <ToolButton label="Paragraph" onClick={run("paragraph")}>
-          <Pilcrow size={16} />
-        </ToolButton>
         <ToolButton label="Inline code" shortcut="Ctrl+`" onClick={run("inlineCode")}>
           <Braces size={16} />
         </ToolButton>

@@ -917,41 +917,6 @@ body.is-resizing .sidebar-resizer::after {
   max-width: 180px;
 }
 
-.tree-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin: 6px -7px 0;
-  padding: 5px 7px;
-  background: var(--background-secondary);
-  border-top: 1px solid var(--background-modifier-border);
-}
-
-.tree-footer-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 25px;
-  padding: 0 7px;
-  border-radius: var(--radius-xs);
-  color: var(--text-faint);
-  font-size: 11.5px;
-  transition: background var(--base-transition), color var(--base-transition);
-}
-
-.tree-footer-button:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
-}
-
-.tree-footer-button:last-child {
-  margin-left: auto;
-  padding: 0 6px;
-}
-
 /* -------------------------------------------------------------- search -- */
 
 .search-panel {
@@ -1359,9 +1324,13 @@ body.is-resizing .sidebar-resizer::after {
 }
 
 .toolbar-wikilink {
+  width: auto;
+  min-width: 34px;
+  padding: 0 6px;
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .toolbar-separator {

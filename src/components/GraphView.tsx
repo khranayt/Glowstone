@@ -50,9 +50,9 @@ export function GraphView() {
     return tab?.kind === "note" ? tab.path ?? null : null;
   });
   const [query, setQuery] = useState("");
-  const [labels, setLabels] = useState(true);
+  const [labels, setLabels] = useState(false);
   const [showOrphans, setShowOrphans] = useState(true);
-  const [showUnresolved, setShowUnresolved] = useState(true);
+  const [showUnresolved, setShowUnresolved] = useState(false);
   const [repulsion, setRepulsion] = useState(1800);
   const [linkDistance, setLinkDistance] = useState(70);
   const [gravity, setGravity] = useState(0.003);
@@ -413,24 +413,27 @@ export function GraphView() {
             <button
               className={`icon-button ${labels ? "active" : ""}`}
               onClick={() => setLabels((value) => !value)}
-              title="Show labels"
-              aria-label="Show labels"
+              title={labels ? "Hide labels" : "Show labels"}
+              aria-label={labels ? "Hide labels" : "Show labels"}
+              aria-pressed={labels}
             >
               <Tag size={15} />
             </button>
             <button
               className={`icon-button ${showOrphans ? "active" : ""}`}
               onClick={() => setShowOrphans((value) => !value)}
-              title="Show orphan notes"
-              aria-label="Show orphan notes"
+              title={showOrphans ? "Hide orphan notes" : "Show orphan notes"}
+              aria-label={showOrphans ? "Hide orphan notes" : "Show orphan notes"}
+              aria-pressed={showOrphans}
             >
               <CircleDot size={15} />
             </button>
             <button
               className={`icon-button ${showUnresolved ? "active" : ""}`}
               onClick={() => setShowUnresolved((value) => !value)}
-              title="Show unresolved links"
-              aria-label="Show unresolved links"
+              title={showUnresolved ? "Hide unresolved links" : "Show unresolved links"}
+              aria-label={showUnresolved ? "Hide unresolved links" : "Show unresolved links"}
+              aria-pressed={showUnresolved}
             >
               <Circle size={15} />
             </button>
@@ -493,12 +496,12 @@ export function GraphView() {
           <span className="legend-item">
             <span className="legend-dot resolved" /> Note
           </span>
-          <span className="legend-item">
-            <span className="legend-dot unresolved" /> Unresolved
-            {stats.unresolved > 0 && (
+          {showUnresolved && stats.unresolved > 0 && (
+            <span className="legend-item">
+              <span className="legend-dot unresolved" /> Unresolved
               <span className="legend-count">{stats.unresolved}</span>
-            )}
-          </span>
+            </span>
+          )}
           {groups.map((group) => (
             <span className="legend-item" key={group.id}>
               <span className="legend-dot" style={{ background: group.color }} /> {group.name}

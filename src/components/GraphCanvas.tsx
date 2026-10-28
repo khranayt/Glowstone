@@ -106,8 +106,8 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     data,
     activeId,
     compact = false,
-    labels = true,
-    showUnresolved = true,
+    labels = false,
+    showUnresolved = false,
     showOrphans = true,
     repulsion = 1800,
     linkDistance = 70,
@@ -445,18 +445,17 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
       for (const link of sim.links) {
         const highlighted =
           focusNode != null && (link.source === focusNode || link.target === focusNode);
-        const dimmed = focusNode != null && !highlighted;
-        if (dimmed) continue;
+        const faded = focusNode != null && !highlighted;
         const missing = link.source.unresolved || link.target.unresolved;
         ctx.beginPath();
         ctx.strokeStyle = highlighted ? palette.edgeActive : palette.edge;
         if (missing) {
           // Links to notes that do not exist stay visible but recede.
           ctx.setLineDash([4 / k, 4 / k]);
-          ctx.globalAlpha = highlighted ? 0.8 : 0.45;
+          ctx.globalAlpha = faded ? 0.1 : highlighted ? 0.8 : 0.45;
         } else {
           ctx.setLineDash([]);
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = faded ? 0.18 : 1;
         }
         ctx.moveTo(link.source.x, link.source.y);
         ctx.lineTo(link.target.x, link.target.y);
@@ -467,8 +466,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
 
       // Nodes. Missing notes are painted first so real notes always stay on top.
       const paintNode = (node: SimNode) => {
-        const dimmed = focusNode != null && !neighbors.has(node.id);
-        if (dimmed) return;
+        const faded = focusNode != null && !neighbors.has(node.id);
         const isActive = activeRef.current === node.id;
         const isHovered = hovered === node;
         const isSelected = sim.selectedIds.has(node.id);
@@ -481,19 +479,22 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
           ctx.beginPath();
           ctx.arc(node.x, node.y, radius * 1.15, 0, Math.PI * 2);
           ctx.fillStyle = palette.unresolved;
-          ctx.globalAlpha = isHovered ? 0.24 : 0.12;
+          ctx.globalAlpha = (isHovered ? 0.24 : 0.12) * (faded ? 0.3 : 1);
           ctx.fill();
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = faded ? 0.32 : 1;
           ctx.strokeStyle = isHovered ? palette.unresolvedHover : palette.unresolved;
           ctx.lineWidth = (isHovered ? 1.6 : 1.25) / k;
           ctx.setLineDash([2 / k, 1.8 / k]);
           ctx.stroke();
           ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
         } else {
           ctx.beginPath();
           ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
           ctx.fillStyle = group?.color ?? (isHovered ? palette.nodeHover : palette.node);
+          ctx.globalAlpha = faded ? 0.38 : 1;
           ctx.fill();
+          ctx.globalAlpha = 1;
         }
         if (isActive || isHovered || isSelected) {
           ctx.beginPath();
@@ -504,7 +505,9 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
               ? palette.unresolvedHover
               : palette.nodeHover;
           ctx.lineWidth = (isSelected ? 2 : 1.6) / k;
+          ctx.globalAlpha = faded ? 0.45 : 1;
           ctx.stroke();
+          ctx.globalAlpha = 1;
         }
       };
       for (const node of sim.nodes) if (node.unresolved) paintNode(node);
@@ -520,11 +523,11 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
         ctx.lineJoin = "round";
         for (const node of sim.nodes) {
           if (!showAll && !neighbors.has(node.id) && activeRef.current !== node.id) continue;
-          if (focusNode && !neighbors.has(node.id)) continue;
           const sx = width / 2 + sim.tx + node.x * k;
           const sy = height / 2 + sim.ty + node.y * k + node.r * k + 4;
           if (sx < -120 || sx > width + 120 || sy < -20 || sy > height + 20) continue;
           const text = node.title.length > 34 ? `${node.title.slice(0, 33)}…` : node.title;
+          ctx.globalAlpha = focusNode != null && !neighbors.has(node.id) ? 0.42 : 1;
           ctx.strokeStyle = palette.labelHalo;
           ctx.lineWidth = 3;
           ctx.strokeText(text, sx, sy);
@@ -534,6 +537,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
               ? palette.nodeHover
               : palette.label;
           ctx.fillText(text, sx, sy);
+          ctx.globalAlpha = 1;
         }
       }
     };

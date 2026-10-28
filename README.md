@@ -1,8 +1,8 @@
 # Glowstone
 
-A local-first Markdown knowledge base for the desktop. Glowstone keeps your notes as plain `.md` files in ordinary folders, then layers on tabs, live preview, backlinks, search, and an interactive graph.
+A local-first Markdown knowledge base for the desktop and Android. Glowstone keeps your notes as plain `.md` files in ordinary folders, then layers on tabs, live preview, backlinks, search, and an interactive graph.
 
-Built with Tauri 2, Rust, React 19, TypeScript, and CodeMirror 6.
+Built with Tauri 2, Rust, React 19, TypeScript, and CodeMirror 6. Available in English and Russian.
 
 ## Features
 
@@ -19,6 +19,12 @@ Built with Tauri 2, Rust, React 19, TypeScript, and CodeMirror 6.
 - **Wikilinks, embeds, tags** — `[[Note]]`, `![[Note]]`, `![[image.png]]`, and `#tags` work in edit and reading modes.
 - **External change watching** — edits made outside Glowstone are picked up without clobbering unsaved work.
 - **Two themes** — dark gray and light, switchable in Settings and remembered.
+- **English and Russian** — switch the whole interface from Settings → General.
+- **Graph groups** — select notes on the graph and group them by the words they share, with editable dot colors.
+- **Bookmarks, daily notes and a ribbon** — Obsidian-style quick actions, plus a searchable settings dialog with core plugin toggles.
+- **Bases (`.base`)** — turn notes into filterable, sortable tables driven by YAML views and frontmatter properties.
+- **Canvas (`.canvas`)** — JSON Canvas boards with text, note, link and group cards, connections, pan and zoom.
+- **Android app** — the same editor, graph, bases and canvas on phones, using a private on-device vault.
 - **Local and private** — no account, no sync service, no telemetry. Settings live in your OS config directory.
 
 ## Getting started
@@ -51,6 +57,24 @@ npm run tauri build
 
 The packaged app and installers are written to `src-tauri/target/release/bundle/`.
 
+### Platform packages
+
+```bash
+# Linux: AppImage, deb and rpm
+npm run tauri build -- --bundles appimage,deb,rpm
+
+# Windows: NSIS installer (.exe)
+npm run tauri build -- --bundles nsis
+
+# Android: APK
+npx tauri android init
+npx tauri android build --apk --target aarch64 armv7 x86_64
+```
+
+See [packaging/README.md](packaging/README.md) for signing the APK and the exact
+toolchain versions, and [.github/workflows/release.yml](.github/workflows/release.yml)
+for automated builds.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -81,8 +105,28 @@ src/                 React application
   styles/            App, editor, Markdown, and graph stylesheets
 src-tauri/           Rust backend
   src/lib.rs         Vault scanning, file operations, search, graph, watcher
+  vendor/html2md/    Patched HTML→Markdown crate (Android-safe)
   icons/             Application icons
+packaging/           Platform build instructions
+.github/workflows/   CI: Linux, Windows and Android packages
 ```
+
+## Building from a checkout on GitHub
+
+1. Create an empty repository on GitHub (no README/license needed).
+2. Push this project:
+
+   ```bash
+   git remote add origin https://github.com/<user>/<repo>.git
+   git push -u origin master
+   ```
+
+3. Run the **Build desktop packages** workflow from the Actions tab (or push a
+   `v0.1.0` tag). It uploads the Linux AppImage/deb/rpm, the Windows `.exe` and
+   the Android APK as downloadable artifacts.
+
+Installers and APKs are intentionally not committed; `release/` is git-ignored.
+Attach them to a GitHub Release instead (`gh release create v0.1.0 release/*`).
 
 ## Markdown support
 

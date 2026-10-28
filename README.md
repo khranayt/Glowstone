@@ -24,7 +24,6 @@ Built with Tauri 2, Rust, React 19, TypeScript, and CodeMirror 6. Available in E
 - **Bookmarks, daily notes and a ribbon** — Obsidian-style quick actions, plus a searchable settings dialog with core plugin toggles.
 - **Bases (`.base`)** — turn notes into filterable, sortable tables driven by YAML views and frontmatter properties.
 - **Canvas (`.canvas`)** — JSON Canvas boards with text, note, link and group cards, connections, pan and zoom.
-- **Android app** — the same editor, graph, bases and canvas on phones, using a private on-device vault.
 - **Local and private** — no account, no sync service, no telemetry. Settings live in your OS config directory.
 
 ## Getting started
@@ -66,15 +65,6 @@ npm run tauri build -- --bundles appimage,deb,rpm
 # Windows: NSIS installer (.exe)
 npm run tauri build -- --bundles nsis
 
-# Android: APK
-npx tauri android init
-npx tauri android build --apk --target aarch64 armv7 x86_64
-```
-
-See [packaging/README.md](packaging/README.md) for signing the APK and the exact
-toolchain versions, and [.github/workflows/release.yml](.github/workflows/release.yml)
-for automated builds.
-
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -93,8 +83,6 @@ for automated builds.
 | `F2` | Rename selected note |
 | `Alt+←` / `Alt+→` | Navigate note history |
 
-On macOS, use `Cmd` in place of `Ctrl`.
-
 ## Repository layout
 
 ```
@@ -108,7 +96,7 @@ src-tauri/           Rust backend
   vendor/html2md/    Patched HTML→Markdown crate (Android-safe)
   icons/             Application icons
 packaging/           Platform build instructions
-.github/workflows/   CI: Linux, Windows and Android packages
+.github/workflows/   CI: Linux and Windows packages
 ```
 
 ## Building from a checkout on GitHub
@@ -122,10 +110,9 @@ packaging/           Platform build instructions
    ```
 
 3. Run the **Build desktop packages** workflow from the Actions tab (or push a
-   `v0.1.0` tag). It uploads the Linux AppImage/deb/rpm, the Windows `.exe` and
-   the Android APK as downloadable artifacts.
+   `v0.1.0` tag). It uploads the Linux AppImage/deb/rpm and the Windows `.exe` as downloadable artifacts.
 
-Installers and APKs are intentionally not committed; `release/` is git-ignored.
+Installers is intentionally not committed; `release/` is git-ignored.
 Attach them to a GitHub Release instead (`gh release create v0.1.0 release/*`).
 
 ## Markdown support

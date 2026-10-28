@@ -65,6 +65,7 @@ interface TooltipState {
 interface Palette {
   node: string;
   unresolved: string;
+  unresolvedHover: string;
   nodeHover: string;
   active: string;
   edge: string;
@@ -79,7 +80,8 @@ const paletteFor = (dark: boolean): Palette =>
   dark
     ? {
         node: "#d9b45a",
-        unresolved: "#6d6d6d",
+        unresolved: "#9a9a94",
+        unresolvedHover: "#d2d2c8",
         nodeHover: "#f4d47c",
         active: "#ffe09a",
         edge: "rgba(180,180,180,0.30)",
@@ -89,7 +91,8 @@ const paletteFor = (dark: boolean): Palette =>
       }
     : {
         node: "#b4861f",
-        unresolved: "#a3a3a3",
+        unresolved: "#7c7870",
+        unresolvedHover: "#3f3b34",
         nodeHover: "#8d6a13",
         active: "#7a5b0d",
         edge: "rgba(80,80,80,0.26)",
@@ -444,50 +447,68 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
           focusNode != null && (link.source === focusNode || link.target === focusNode);
         const dimmed = focusNode != null && !highlighted;
         if (dimmed) continue;
+        const missing = link.source.unresolved || link.target.unresolved;
         ctx.beginPath();
         ctx.strokeStyle = highlighted ? palette.edgeActive : palette.edge;
-        if (link.source.unresolved || link.target.unresolved) {
+        if (missing) {
+          // Links to notes that do not exist stay visible but recede.
           ctx.setLineDash([4 / k, 4 / k]);
+          ctx.globalAlpha = highlighted ? 0.8 : 0.45;
         } else {
           ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
         }
         ctx.moveTo(link.source.x, link.source.y);
         ctx.lineTo(link.target.x, link.target.y);
         ctx.stroke();
       }
+      ctx.globalAlpha = 1;
       ctx.setLineDash([]);
 
-      // Nodes.
-      for (const node of sim.nodes) {
+      // Nodes. Missing notes are painted first so real notes always stay on top.
+      const paintNode = (node: SimNode) => {
         const dimmed = focusNode != null && !neighbors.has(node.id);
-        if (dimmed) continue;
+        if (dimmed) return;
         const isActive = activeRef.current === node.id;
         const isHovered = hovered === node;
         const isSelected = sim.selectedIds.has(node.id);
         const group = node.unresolved ? null : groupForNode(node, groupsRef.current);
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.r / Math.max(0.7, Math.min(1, k + 0.35)), 0, Math.PI * 2);
-        ctx.fillStyle = node.unresolved
-          ? palette.unresolved
-          : group?.color ?? (isHovered ? palette.nodeHover : palette.node);
-        ctx.globalAlpha = node.unresolved ? 0.72 : 1;
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        // Keep dots readable when the graph is zoomed far out.
+        const minScreenRadius = node.unresolved ? 2.4 : 2;
+        const radius = Math.max(node.r, minScreenRadius / Math.max(0.12, k));
         if (node.unresolved) {
-          ctx.strokeStyle = palette.unresolved;
-          ctx.lineWidth = 1 / k;
-          ctx.setLineDash([3 / k, 3 / k]);
+          // Hollow dashed rings match the legend and never look like real notes.
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius * 1.15, 0, Math.PI * 2);
+          ctx.fillStyle = palette.unresolved;
+          ctx.globalAlpha = isHovered ? 0.24 : 0.12;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = isHovered ? palette.unresolvedHover : palette.unresolved;
+          ctx.lineWidth = (isHovered ? 1.6 : 1.25) / k;
+          ctx.setLineDash([2 / k, 1.8 / k]);
           ctx.stroke();
           ctx.setLineDash([]);
+        } else {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = group?.color ?? (isHovered ? palette.nodeHover : palette.node);
+          ctx.fill();
         }
         if (isActive || isHovered || isSelected) {
           ctx.beginPath();
-          ctx.arc(node.x, node.y, node.r + (isSelected ? 4 / k : 3 / k), 0, Math.PI * 2);
-          ctx.strokeStyle = isActive ? palette.active : palette.nodeHover;
+          ctx.arc(node.x, node.y, radius + (isSelected ? 4 / k : 3 / k), 0, Math.PI * 2);
+          ctx.strokeStyle = isActive
+            ? palette.active
+            : node.unresolved
+              ? palette.unresolvedHover
+              : palette.nodeHover;
           ctx.lineWidth = (isSelected ? 2 : 1.6) / k;
           ctx.stroke();
         }
-      }
+      };
+      for (const node of sim.nodes) if (node.unresolved) paintNode(node);
+      for (const node of sim.nodes) if (!node.unresolved) paintNode(node);
       ctx.restore();
 
       // Labels in screen space so they stay crisp.

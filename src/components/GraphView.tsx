@@ -100,10 +100,11 @@ export function GraphView() {
   }, [graph, scope, activeId, hasActive, depth]);
 
   const stats = useMemo(() => {
-    if (!graph) return { notes: 0, links: 0 };
+    if (!graph) return { notes: 0, links: 0, unresolved: 0 };
     return {
       notes: data.nodes.filter((node) => !node.unresolved).length,
       links: data.links.length,
+      unresolved: data.nodes.filter((node) => node.unresolved).length,
     };
   }, [graph, data]);
 
@@ -494,6 +495,9 @@ export function GraphView() {
           </span>
           <span className="legend-item">
             <span className="legend-dot unresolved" /> Unresolved
+            {stats.unresolved > 0 && (
+              <span className="legend-count">{stats.unresolved}</span>
+            )}
           </span>
           {groups.map((group) => (
             <span className="legend-item" key={group.id}>

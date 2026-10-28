@@ -172,8 +172,14 @@
 }
 
 .legend-dot.unresolved {
-  border: 1.5px dashed var(--text-faint);
+  border: 1.5px dashed var(--text-muted);
   background: transparent;
+}
+
+.legend-count {
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .graph-loading,
@@ -278,9 +284,9 @@
 .graph-tooltip-unresolved {
   flex: 0 0 auto;
   padding: 1px 5px;
-  border: 1px dashed var(--text-faint);
+  border: 1px dashed var(--text-muted);
   border-radius: 8px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: 8.5px;
   font-weight: 500;
   letter-spacing: 0.03em;

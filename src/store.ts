@@ -510,6 +510,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const path = await api.androidVault();
       if (path) {
         await get().openVaultByPath(path);
+        const welcome = joinPath(path, "Welcome.md");
+        if (
+          !get().tabs.some((tab) => tab.kind === "note") &&
+          (await api.fileExists(welcome))
+        ) {
+          await get().openNote(welcome, { newTab: false });
+        }
         set({ sidebarOpen: false });
       } else {
         set({ ready: true });

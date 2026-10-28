@@ -19,6 +19,7 @@ import { TabBar } from "./TabBar";
 import { Popover } from "./Popover";
 import { WindowControls } from "./WindowControls";
 import { basename } from "../lib/utils";
+import { isAndroid } from "../lib/api";
 import { useT } from "../lib/useT";
 import { plural } from "../lib/i18n";
 
@@ -43,7 +44,8 @@ export function TitleBar() {
   const refreshTree = useAppStore((s) => s.refreshTree);
   const refreshGraph = useAppStore((s) => s.refreshGraph);
 
-  const leftWidth = sidebarOpen ? Math.max(148, 48 + sidebarWidth) : 148;
+  const mobile = isAndroid();
+  const leftWidth = mobile ? 148 : sidebarOpen ? Math.max(148, 48 + sidebarWidth) : 148;
 
   return (
     <header className="titlebar" data-tauri-drag-region>
@@ -111,46 +113,50 @@ export function TitleBar() {
                 <span>{t("New folder")}</span>
               </button>
               <div className="menu-separator" />
-              <button
-                className="menu-item"
-                onClick={() => {
-                  close();
-                  void chooseVault();
-                }}
-              >
-                <span className="menu-icon-spacer" />
-                <span>{t("Open another vault…")}</span>
-              </button>
-              <button
-                className="menu-item"
-                onClick={() => {
-                  close();
-                  void createVault();
-                }}
-              >
-                <Plus size={15} />
-                <span>{t("Create new vault…")}</span>
-              </button>
-              <button
-                className="menu-item"
-                onClick={() => {
-                  close();
-                  openVaults();
-                }}
-              >
-                <Layers size={15} />
-                <span>{t("Manage vaults…")}</span>
-              </button>
-              <button
-                className="menu-item"
-                onClick={() => {
-                  close();
-                  openImport();
-                }}
-              >
-                <Download size={15} />
-                <span>{t("Import notes…")}</span>
-              </button>
+              {!mobile && (
+                <>
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      close();
+                      void chooseVault();
+                    }}
+                  >
+                    <span className="menu-icon-spacer" />
+                    <span>{t("Open another vault…")}</span>
+                  </button>
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      close();
+                      void createVault();
+                    }}
+                  >
+                    <Plus size={15} />
+                    <span>{t("Create new vault…")}</span>
+                  </button>
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      close();
+                      openVaults();
+                    }}
+                  >
+                    <Layers size={15} />
+                    <span>{t("Manage vaults…")}</span>
+                  </button>
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      close();
+                      openImport();
+                    }}
+                  >
+                    <Download size={15} />
+                    <span>{t("Import notes…")}</span>
+                  </button>
+                </>
+              )}
               {settings.recentVaults.filter((path) => path !== vault?.path).length > 0 && (
                 <>
                   <div className="menu-label">{t("Recent vaults")}</div>
@@ -279,26 +285,30 @@ export function TitleBar() {
                 <span>{t("About Glowstone")}</span>
               </button>
               <div className="menu-separator" />
-              <button
-                className="menu-item"
-                onClick={() => {
-                  close();
-                  openVaults();
-                }}
-              >
-                <Layers size={15} />
-                <span>{t("Manage vaults…")}</span>
-              </button>
-              <button
-                className="menu-item"
-                onClick={() => {
-                  close();
-                  openImport();
-                }}
-              >
-                <Download size={15} />
-                <span>{t("Import notes…")}</span>
-              </button>
+              {!mobile && (
+                <>
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      close();
+                      openVaults();
+                    }}
+                  >
+                    <Layers size={15} />
+                    <span>{t("Manage vaults…")}</span>
+                  </button>
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      close();
+                      openImport();
+                    }}
+                  >
+                    <Download size={15} />
+                    <span>{t("Import notes…")}</span>
+                  </button>
+                </>
+              )}
               <div className="menu-separator" />
               <button
                 className="menu-item menu-danger"

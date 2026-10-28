@@ -55,3 +55,42 @@ jobs:
         with:
           name: glowstone-windows
           path: src-tauri/target/release/bundle/nsis/*.exe
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+      - name: Add Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+      - run: npm ci
+      - name: Initialize Android project
+        run: npx tauri android init
+      - name: Build APK
+        run: npx tauri android build --apk --target aarch64 armv7 x86_64
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+      - name: Sign APK
+        run: |
+          keytool -genkeypair -keystore android.keystore -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name '*unsigned.apk' | head -n 1)
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks android.keystore --ks-pass pass:android --key-pass pass:android \
+            --ks-key-alias androiddebugkey --out glowstone.apk "$APK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glowstone-android
+          path: glowstone.apk

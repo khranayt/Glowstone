@@ -580,6 +580,8 @@ const ru: Record<string, string> = {
   "Sort by name": "Сортировать по имени",
   "Sort by modified": "Сортировать по изменению",
   "Sort files": "Сортировка файлов",
+  "Start with a local vault": "Начать с локального хранилища",
+  "This vault is stored in the app's private storage.": "Это хранилище находится во внутреннем хранилище приложения.",
 };
 
 export const t = (text: string, vars?: Record<string, string | number>): string => {

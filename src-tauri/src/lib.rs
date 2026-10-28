@@ -350,7 +350,10 @@ fn open_vault(app: AppHandle, state: State<'_, AppState>, path: String) -> Resul
         persist_settings(&app, &settings)?;
     }
 
-    start_watcher(&app, canonical, &state)?;
+    // File watching is a convenience; some mobile filesystems do not provide it.
+    if let Err(error) = start_watcher(&app, canonical, &state) {
+        eprintln!("File watcher unavailable: {error}");
+    }
     Ok(info)
 }
 
@@ -1441,6 +1444,35 @@ fn should_emit<'a>(paths: impl Iterator<Item = &'a str>) -> bool {
 // Entrypoint
 // ---------------------------------------------------------------------------
 
+#[tauri::command]
+fn is_android() -> bool {
+    cfg!(target_os = "android")
+}
+
+/// App-private vault used by the Android build on first launch.
+#[tauri::command]
+fn android_vault(app: AppHandle) -> Result<Option<String>, String> {
+    if !cfg!(target_os = "android") {
+        return Ok(None);
+    }
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve app data directory: {error}"))?;
+    let vault = data.join("vault");
+    fs::create_dir_all(&vault).map_err(|error| format!("Could not create vault: {error}"))?;
+    let welcome = vault.join("Welcome.md");
+    if !welcome.exists() {
+        fs::write(
+            &welcome,
+            "# Welcome to Glowstone\n\nThis vault is stored safely inside the app.\n\n- Use the ribbon to open the graph, canvas and bases.\n- Type `[[` to link another note.\n- Paste or drop images to keep them in `attachments/`.\n",
+        )
+        .map_err(|error| format!("Could not create welcome note: {error}"))?;
+    }
+    let canonical = fs::canonicalize(&vault).map_err(|error| error.to_string())?;
+    Ok(Some(norm(&canonical)))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1471,6 +1503,8 @@ pub fn run() {
             delete_entry,
             file_exists,
             read_attachment,
+            is_android,
+            android_vault,
             ensure_vault_folder,
             save_attachment,
             copy_attachment,

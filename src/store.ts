@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
-import { api } from "./lib/api";
+import { api, isAndroid } from "./lib/api";
 import {
   activeTabOf,
   basename,
@@ -141,6 +141,7 @@ interface AppState {
 
   init: () => Promise<void>;
   openVaultByPath: (path: string) => Promise<void>;
+  openAndroidVault: () => Promise<void>;
   chooseVault: () => Promise<void>;
   createVault: () => Promise<void>;
   closeVault: () => Promise<void>;
@@ -358,9 +359,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       applyTheme(merged.theme);
       setLanguage(merged.language);
       set({ settings: merged });
+      const mobilePlatform =
+        isAndroid() || (await api.isAndroidPlatform().catch(() => false));
+      if (mobilePlatform) set({ sidebarOpen: false });
       if (merged.lastVault) {
         await get().openVaultByPath(merged.lastVault);
-      } else {
+      }
+      if (!get().vault && mobilePlatform) {
+        await get().openAndroidVault();
+      } else if (!get().vault) {
         set({ ready: true });
       }
     } catch (error) {
@@ -495,6 +502,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       set({ initializing: false, ready: true });
       get().toast(t("Could not open vault: {error}", { error: String(error) }), "error");
+    }
+  },
+
+  async openAndroidVault() {
+    try {
+      const path = await api.androidVault();
+      if (path) {
+        await get().openVaultByPath(path);
+        set({ sidebarOpen: false });
+      } else {
+        set({ ready: true });
+      }
+    } catch (error) {
+      set({ ready: true });
+      get().toast(String(error), "error");
     }
   },
 

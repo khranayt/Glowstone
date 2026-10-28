@@ -4,6 +4,7 @@ import { useAppStore } from "../store";
 import { WindowControls } from "./WindowControls";
 import { basename } from "../lib/utils";
 import { useT } from "../lib/useT";
+import { isAndroid } from "../lib/api";
 
 export function Welcome() {
   const t = useT();
@@ -13,6 +14,7 @@ export function Welcome() {
   const openVaultByPath = useAppStore((s) => s.openVaultByPath);
   const openImport = useAppStore((s) => s.openImport);
   const openVaults = useAppStore((s) => s.openVaults);
+  const openAndroidVault = useAppStore((s) => s.openAndroidVault);
   const initializing = useAppStore((s) => s.initializing);
 
   return (
@@ -31,22 +33,35 @@ export function Welcome() {
         <p className="welcome-tagline">{t("Your notes, connected.")} {t("Local-first Markdown knowledge base.")}</p>
 
         <div className="welcome-actions">
-          <button className="welcome-button primary" onClick={() => void chooseVault()} disabled={initializing}>
-            <FolderOpen size={18} />
-            {t("Open folder as vault")}
-          </button>
-          <button className="welcome-button" onClick={() => void createVault()} disabled={initializing}>
-            <Plus size={18} />
-            {t("Create new vault")}
-          </button>
-          <button className="welcome-button" onClick={openImport} disabled={initializing}>
-            <Download size={18} />
-            {t("Import notes")}
-          </button>
-          <button className="welcome-button" onClick={openVaults} disabled={initializing}>
-            <Layers size={18} />
-            {t("Manage vaults")}
-          </button>
+          {isAndroid() ? (
+            <button
+              className="welcome-button primary"
+              onClick={() => void openAndroidVault()}
+              disabled={initializing}
+            >
+              <FolderOpen size={18} />
+              {t("Start with a local vault")}
+            </button>
+          ) : (
+            <>
+              <button className="welcome-button primary" onClick={() => void chooseVault()} disabled={initializing}>
+                <FolderOpen size={18} />
+                {t("Open folder as vault")}
+              </button>
+              <button className="welcome-button" onClick={() => void createVault()} disabled={initializing}>
+                <Plus size={18} />
+                {t("Create new vault")}
+              </button>
+              <button className="welcome-button" onClick={openImport} disabled={initializing}>
+                <Download size={18} />
+                {t("Import notes")}
+              </button>
+              <button className="welcome-button" onClick={openVaults} disabled={initializing}>
+                <Layers size={18} />
+                {t("Manage vaults")}
+              </button>
+            </>
+          )}
         </div>
 
         {initializing && (

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isTauri } from "../lib/api";
+import { isAndroid, isTauri } from "../lib/api";
 import { useT } from "../lib/useT";
 
 export function WindowControls() {
+  if (isAndroid()) return null;
   const t = useT();
   const [maximized, setMaximized] = useState(false);
 

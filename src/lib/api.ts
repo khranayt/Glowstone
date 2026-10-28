@@ -12,6 +12,9 @@ import type {
 export const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+export const isAndroid = () =>
+  typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
 export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
@@ -35,6 +38,8 @@ export const api = {
   fileExists: (path: string) => invoke<boolean>("file_exists", { path }),
   readAttachment: (vault: string, path: string) =>
     invoke<string>("read_attachment", { vault, path }),
+  androidVault: () => invoke<string | null>("android_vault"),
+  isAndroidPlatform: () => invoke<boolean>("is_android"),
   ensureVaultFolder: (vault: string, folder: string) =>
     invoke<string>("ensure_vault_folder", { vault, folder }),
   saveAttachment: (vault: string, folder: string, name: string, data: string) =>

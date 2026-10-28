@@ -32,3 +32,6 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+[patch.crates-io]
+html2md = { path = "vendor/html2md" }

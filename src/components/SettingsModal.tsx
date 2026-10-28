@@ -30,6 +30,7 @@ import { Modal } from "./Modal";
 import { useAppStore, type SettingsSection } from "../store";
 import { flattenNotes } from "../lib/utils";
 import { useT } from "../lib/useT";
+import { isAndroid } from "../lib/api";
 import { CORE_PLUGINS, pluginEnabled, togglePlugin } from "../lib/plugins";
 import logo from "../assets/logo.png";
 
@@ -333,6 +334,27 @@ export function SettingsModal() {
                         {vault.path}
                       </div>
                     </div>
+                    {!isAndroid() && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          close();
+                          void chooseVault();
+                        }}
+                      >
+                        {t("Switch…")}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="setting-description">{t("No vault is currently open.")}</p>
+                )}
+                {isAndroid() ? (
+                  <p className="setting-description">
+                    {t("This vault is stored in the app's private storage.")}
+                  </p>
+                ) : (
+                  <div className="setting-button-row">
                     <button
                       className="btn btn-secondary"
                       onClick={() => {
@@ -340,40 +362,27 @@ export function SettingsModal() {
                         void chooseVault();
                       }}
                     >
-                      {t("Switch…")}
+                      {t("Open another vault…")}
                     </button>
+                    <button className="btn btn-secondary" onClick={openVaults}>
+                      {t("Manage vaults…")}
+                    </button>
+                    <button className="btn btn-secondary" onClick={openImport}>
+                      {t("Import notes…")}
+                    </button>
+                    {vault && (
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          close();
+                          void closeVault();
+                        }}
+                      >
+                        {t("Close vault")}
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <p className="setting-description">{t("No vault is currently open.")}</p>
                 )}
-                <div className="setting-button-row">
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      close();
-                      void chooseVault();
-                    }}
-                  >
-                    {t("Open another vault…")}
-                  </button>
-                  <button className="btn btn-secondary" onClick={openVaults}>
-                    {t("Manage vaults…")}
-                  </button>
-                  <button className="btn btn-secondary" onClick={openImport}>
-                    {t("Import notes…")}
-                  </button>
-                  {vault && (
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => {
-                        close();
-                        void closeVault();
-                      }}
-                    >
-                      {t("Close vault")}
-                    </button>
-                  )}
-                </div>
               </div>
             </>
           )}

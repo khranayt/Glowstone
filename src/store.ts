@@ -478,7 +478,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         activeTabId: activeTab.id,
         selectedPath: activeTab.path ?? null,
         sidebarView: restoredView,
-        sidebarOpen: ws.sidebarOpen,
+        sidebarOpen: isAndroid() ? false : ws.sidebarOpen,
         sidebarWidth: Math.min(480, Math.max(200, ws.sidebarWidth || 280)),
         rightPanelOpen: ws.rightPanelOpen,
         rightPanel: ws.rightPanel,
